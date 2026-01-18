@@ -4,12 +4,14 @@ import { useEffect, useState, useRef } from 'react';
 
 export function useIdleDetection(timeoutMs: number = 10000): boolean {
   const [isIdle, setIsIdle] = useState(false);
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const resetTimer = () => {
       setIsIdle(false);
-      clearTimeout(timeoutRef.current);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
 
       timeoutRef.current = setTimeout(() => {
         setIsIdle(true);
@@ -24,7 +26,9 @@ export function useIdleDetection(timeoutMs: number = 10000): boolean {
 
       return () => {
         events.forEach((e) => window.removeEventListener(e, resetTimer));
-        clearTimeout(timeoutRef.current);
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
       };
     }
   }, [timeoutMs]);

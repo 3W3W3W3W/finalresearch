@@ -1,5 +1,3 @@
-'use server';
-
 export interface ImageVariant {
   url: string;
   width: number;
@@ -58,7 +56,6 @@ export interface ArenaChannel {
 }
 
 interface FetchOptions {
-  cache?: RequestCache;
   tags?: string[];
 }
 
@@ -74,16 +71,15 @@ async function fetchArena(
 
   const url = `https://api.are.na/v2${endpoint}`;
 
-  const fetchOptions: RequestInit = {
+  const fetchOptions: RequestInit & { tags?: string[] } = {
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    cache: options.cache || 'default',
   };
 
   if (options.tags) {
-    (fetchOptions as any).tags = options.tags;
+    fetchOptions.tags = options.tags;
   }
 
   try {
@@ -106,7 +102,6 @@ export async function fetchArenaChannel(
   channelSlug: string
 ): Promise<ArenaChannel> {
   const data = await fetchArena(`/channels/${channelSlug}`, {
-    cache: 'revalidate',
     tags: [`arena-channel-${channelSlug}`],
   });
 
@@ -115,7 +110,6 @@ export async function fetchArenaChannel(
 
 export async function fetchArenaBlock(blockId: string): Promise<ArenaBlock> {
   const data = await fetchArena(`/blocks/${blockId}`, {
-    cache: 'revalidate',
     tags: [`arena-block-${blockId}`],
   });
 
