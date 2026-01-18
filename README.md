@@ -1,36 +1,159 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Studio Portfolio
 
-## Getting Started
+Modern landing page built with Next.js 16, React 19, TypeScript, and Are.na CMS.
 
-First, run the development server:
+## Features
+
+- **Interactive Gyroscope**: iPhone tilt detection for 3D hero image effects
+- **Idle Detection**: Displays random images after 10 seconds of user inactivity
+- **Text Animations**: Smooth fade-in animations on scroll
+- **Are.na CMS**: All content and images managed through Are.na API
+- **ISR Caching**: Incremental Static Regeneration for optimal performance
+- **Mobile Responsive**: Fully responsive design for all devices
+- **TypeScript**: Full type safety throughout the codebase
+
+## Tech Stack
+
+- **Framework**: Next.js 16 with App Router
+- **React**: 19.x with latest features
+- **Language**: TypeScript 5
+- **Styling**: Tailwind CSS 4
+- **Image Optimization**: Sharp 33.x
+- **CMS**: Are.na (API-based)
+- **Deployment**: Vercel
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 20+
+- npm (or pnpm/yarn)
+
+### Installation
+
+1. Clone the repository:
+
+```bash
+git clone <repository-url>
+cd portfolio
+```
+
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+3. Create `.env.local` with values from your team vault:
+
+```bash
+ARENA_TOKEN=your_arena_token
+ARENA_MAIN_CHANNEL=studio_main
+SITE_TITLE=Your Studio Name
+SITE_DOMAIN=yourdomain.com
+REVALIDATE_SECRET=your_revalidate_secret
+```
+
+4. Start development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+5. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+├── app/              # Next.js App Router
+│   ├── layout.tsx   # Root layout with metadata
+│   ├── page.tsx     # Home page
+│   └── globals.css  # Global styles & animations
+├── components/       # React components
+│   ├── Hero.tsx     # Hero section with gyroscope
+│   ├── IdleImage.tsx # Idle image display
+│   └── AnimatedText.tsx # Animated text component
+├── hooks/           # Custom React hooks
+│   ├── useGyroscope.ts # Device orientation
+│   └── useIdleDetection.ts # Idle timeout
+└── lib/             # Utilities & API clients
+    ├── arena.ts     # Are.na API client
+    ├── content.ts   # Content fetching
+    └── site.ts      # Site configuration
+```
 
-## Learn More
+## Environment Variables
 
-To learn more about Next.js, take a look at the following resources:
+See `.env.local` (not committed). Template in `env.example`:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `ARENA_TOKEN`: Are.na API token ([get here](https://www.are.na/settings/token))
+- `ARENA_MAIN_CHANNEL`: Are.na channel slug for content
+- `SITE_TITLE`: Site title for metadata
+- `SITE_DOMAIN`: Site domain for metadata
+- `REVALIDATE_SECRET`: Secret for manual cache invalidation
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Development
 
-## Deploy on Vercel
+### Build for production:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run build
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Run production build locally:
+
+```bash
+npm run start
+```
+
+### Lint code:
+
+```bash
+npm run lint
+```
+
+## Are.na Setup
+
+See [ARENA_SETUP.md](./ARENA_SETUP.md) for detailed Are.na content structure.
+
+## Team Collaboration
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for branch naming, commit conventions, and PR process.
+
+## Deployment
+
+This project auto-deploys to Vercel on pushes to `main` branch. See Vercel project settings for:
+
+- Environment variables
+- Custom domain configuration
+- Deployment logs
+
+## Performance
+
+- ISR cache revalidation: 300 seconds
+- Image formats: WebP, AVIF with fallback
+- Lazy loading enabled for all images
+- Server-side rendering for initial load
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| `.env.local` not found | Get values from team vault (1Password/Bitwarden) |
+| Are.na API 401 | Verify `ARENA_TOKEN` in `.env.local` |
+| Gyroscope not working | Ensure HTTPS (or localhost), iOS 13+, permissions granted |
+| Images not loading | Check Are.na channel is public, verify URL patterns in `next.config.ts` |
+| Build fails | Run `npm install` and `npm run build` locally first |
+
+## Resources
+
+- [Next.js Docs](https://nextjs.org/docs)
+- [React Docs](https://react.dev)
+- [Tailwind CSS](https://tailwindcss.com)
+- [Are.na API](https://www.are.na/api/documentation)
+- [Vercel Docs](https://vercel.com/docs)
+
+## License
+
+Private project. All rights reserved.
