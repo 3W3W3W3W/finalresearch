@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useMemo, useState, useEffect } from 'react';
+import { useRef, useMemo, useState, useEffect, createRef } from 'react';
 import { useMousePosition, MousePosition } from '@/hooks/useMousePosition';
 import { useHoverZone } from '@/hooks/useHoverZone';
 import { BorderEdge } from './BorderEdge';
@@ -29,7 +29,7 @@ export function BorderFrame() {
   const [placedBlocks, setPlacedBlocks] = useState<PlacedBlocks>({});
   const [justPlacedZones, setJustPlacedZones] = useState<Set<string>>(new Set());
   const [hoveredLinkRect, setHoveredLinkRect] = useState<DOMRect | null>(null);
-  const placedBlockRefs = useRef<Record<string, React.RefObject<HTMLDivElement>>>({});
+  const placedBlockRefs = useRef<Record<string, React.RefObject<HTMLDivElement | null>>>({});
 
   const handleLinkHover = (rect: DOMRect | null) => {
     setHoveredLinkRect(rect);
@@ -38,9 +38,9 @@ export function BorderFrame() {
   const isLinkHovered = hoveredLinkRect !== null;
 
   // Create or get ref for a placed block
-  const getPlacedBlockRef = (zone: string): React.RefObject<HTMLDivElement> => {
+  const getPlacedBlockRef = (zone: string): React.RefObject<HTMLDivElement | null> => {
     if (!placedBlockRefs.current[zone]) {
-      placedBlockRefs.current[zone] = useRef<HTMLDivElement>(null);
+      placedBlockRefs.current[zone] = createRef<HTMLDivElement>();
     }
     return placedBlockRefs.current[zone];
   };
