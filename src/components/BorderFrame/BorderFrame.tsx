@@ -40,7 +40,7 @@ export function BorderFrame() {
   // Create or get ref for a placed block
   const getPlacedBlockRef = (zone: string): React.RefObject<HTMLDivElement> => {
     if (!placedBlockRefs.current[zone]) {
-      placedBlockRefs.current[zone] = { current: null } as React.RefObject<HTMLDivElement>;
+      placedBlockRefs.current[zone] = useRef<HTMLDivElement>(null);
     }
     return placedBlockRefs.current[zone];
   };
