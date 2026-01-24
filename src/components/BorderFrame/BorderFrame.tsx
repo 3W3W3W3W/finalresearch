@@ -38,9 +38,9 @@ export function BorderFrame() {
   const isLinkHovered = hoveredLinkRect !== null;
 
   // Create or get ref for a placed block
-  const getPlacedBlockRef = (zone: string) => {
+  const getPlacedBlockRef = (zone: string): React.RefObject<HTMLDivElement> => {
     if (!placedBlockRefs.current[zone]) {
-      placedBlockRefs.current[zone] = { current: null };
+      placedBlockRefs.current[zone] = { current: null } as React.RefObject<HTMLDivElement>;
     }
     return placedBlockRefs.current[zone];
   };
