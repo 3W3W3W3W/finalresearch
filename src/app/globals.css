@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+:root {
+  --background: #000000;
+  --foreground: #464861;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-size-xs: 0.5rem;
+  --font-size-xs--line-height: 1rem;
+}
+
+html,
+body {
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, sans-serif;
+  font-size: 10px;
+}
+
+@media (min-width: 640px) {
+  body {
+    font-size: 12px;
+  }
+}
+
+a {
+  text-decoration: none;
+}
+
+/* Override --text-xs variable for mobile */
+:root {
+  --text-xs: 0.625rem;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --text-xs: 0.75rem;
+  }
+}
+
