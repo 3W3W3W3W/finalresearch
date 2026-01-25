@@ -10,6 +10,7 @@ interface HoverTextBlockProps {
   isJustPlaced?: boolean;
   isDragging?: boolean;
   onLinkHover?: (rect: DOMRect | null) => void;
+  onMobileLinkClick?: (rect: DOMRect) => void;
 }
 
 interface TextSegment {
@@ -62,15 +63,22 @@ interface RenderSegmentProps {
   onEmailCopied?: () => void;
   copiedIdx?: number;
   onLinkHover?: (rect: DOMRect | null) => void;
+  onMobileLinkClick?: (rect: DOMRect) => void;
 }
 
-function LinkSegment({ segment, idx, isJustPlaced, isDragging, onLinkHover }: RenderSegmentProps) {
+function LinkSegment({ segment, idx, isJustPlaced, isDragging, onLinkHover, onMobileLinkClick }: RenderSegmentProps) {
   const linkRef = useRef<HTMLAnchorElement>(null);
 
   const handleLinkClick = (e: React.MouseEvent) => {
     if (isJustPlaced) return;
     e.preventDefault();
     e.stopPropagation();
+
+    // Trigger mobile cursor movement if callback provided
+    if (linkRef.current && onMobileLinkClick) {
+      onMobileLinkClick(linkRef.current.getBoundingClientRect());
+    }
+
     if (segment.url) {
       window.open(segment.url, '_blank');
     }
@@ -109,13 +117,19 @@ function LinkSegment({ segment, idx, isJustPlaced, isDragging, onLinkHover }: Re
   );
 }
 
-function CallSegment({ segment, idx, isJustPlaced, isDragging, onLinkHover }: RenderSegmentProps) {
+function CallSegment({ segment, idx, isJustPlaced, isDragging, onLinkHover, onMobileLinkClick }: RenderSegmentProps) {
   const linkRef = useRef<HTMLAnchorElement>(null);
 
   const handleLinkClick = (e: React.MouseEvent) => {
     if (isJustPlaced) return;
     e.preventDefault();
     e.stopPropagation();
+
+    // Trigger mobile cursor movement if callback provided
+    if (linkRef.current && onMobileLinkClick) {
+      onMobileLinkClick(linkRef.current.getBoundingClientRect());
+    }
+
     if (segment.url) {
       window.open(segment.url, '_blank');
     }
@@ -151,13 +165,19 @@ function CallSegment({ segment, idx, isJustPlaced, isDragging, onLinkHover }: Re
   );
 }
 
-function EmailSegment({ segment, idx, isJustPlaced, isDragging, onEmailCopied, copiedIdx, onLinkHover }: RenderSegmentProps) {
+function EmailSegment({ segment, idx, isJustPlaced, isDragging, onEmailCopied, copiedIdx, onLinkHover, onMobileLinkClick }: RenderSegmentProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const handleCopyEmail = (e: React.MouseEvent) => {
     if (isJustPlaced) return;
     e.preventDefault();
     e.stopPropagation();
+
+    // Trigger mobile cursor movement if callback provided
+    if (buttonRef.current && onMobileLinkClick) {
+      onMobileLinkClick(buttonRef.current.getBoundingClientRect());
+    }
+
     navigator.clipboard.writeText(segment.content);
     onEmailCopied?.();
   };
@@ -234,10 +254,19 @@ interface ResourceLinkProps {
   href: string;
   children: React.ReactNode;
   onLinkHover?: (rect: DOMRect | null) => void;
+  onMobileLinkClick?: (rect: DOMRect) => void;
 }
 
-function ResourceLink({ href, children, onLinkHover }: ResourceLinkProps) {
+function ResourceLink({ href, children, onLinkHover, onMobileLinkClick }: ResourceLinkProps) {
   const linkRef = useRef<HTMLAnchorElement>(null);
+
+  const handleClick = (e: React.MouseEvent) => {
+    // Trigger mobile cursor movement if callback provided
+    if (linkRef.current && onMobileLinkClick) {
+      onMobileLinkClick(linkRef.current.getBoundingClientRect());
+    }
+    // Don't prevent default - let the link open normally
+  };
 
   const handleMouseEnter = () => {
     if (linkRef.current && onLinkHover) {
@@ -259,6 +288,7 @@ function ResourceLink({ href, children, onLinkHover }: ResourceLinkProps) {
       rel="noopener noreferrer"
       style={{ textDecoration: 'underline' }}
       className="hover:opacity-70 transition-opacity"
+      onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -268,7 +298,7 @@ function ResourceLink({ href, children, onLinkHover }: ResourceLinkProps) {
 }
 
 export const HoverTextBlock = forwardRef<HTMLDivElement, HoverTextBlockProps>(
-  function HoverTextBlock({ position, content, zone, isJustPlaced = false, isDragging = false, onLinkHover }, ref) {
+  function HoverTextBlock({ position, content, zone, isJustPlaced = false, isDragging = false, onLinkHover, onMobileLinkClick }, ref) {
     const isHorizontalZone = zone === 'top' || zone === 'bottom';
     const segments = parseContent(content);
     const [copiedIdx, setCopiedIdx] = useState<number | undefined>(undefined);
@@ -329,6 +359,7 @@ export const HoverTextBlock = forwardRef<HTMLDivElement, HoverTextBlockProps>(
             onEmailCopied: handleEmailCopied,
             copiedIdx,
             onLinkHover,
+            onMobileLinkClick,
           })
         )}
         {/* Resources section - only shown when placed */}
@@ -347,10 +378,10 @@ export const HoverTextBlock = forwardRef<HTMLDivElement, HoverTextBlockProps>(
                 gap: '1rem',
               }}
             >
-              <ResourceLink href="http://are.na/final-research/channels" onLinkHover={onLinkHover}>
+              <ResourceLink href="http://are.na/final-research/channels" onLinkHover={onLinkHover} onMobileLinkClick={onMobileLinkClick}>
                 Are.na
               </ResourceLink>
-              <ResourceLink href="https://instagram.com/final.research" onLinkHover={onLinkHover}>
+              <ResourceLink href="https://instagram.com/final.research" onLinkHover={onLinkHover} onMobileLinkClick={onMobileLinkClick}>
                 Instagram
               </ResourceLink>
             </div>
