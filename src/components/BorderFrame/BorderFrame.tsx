@@ -21,7 +21,7 @@ type PlacedBlocks = {
 };
 
 // Threshold for distinguishing tap from drag (in pixels) - lower = more sensitive
-const TAP_THRESHOLD = 2;
+const TAP_THRESHOLD = 2.25;
 // Duration for cursor return animation (ms)
 const CURSOR_RETURN_DURATION = 200;
 
@@ -116,15 +116,22 @@ export function BorderFrame() {
 
   // Find interactive element (link or button) at a given point
   const getInteractiveElementAtPoint = useCallback((point: MousePosition): HTMLElement | null => {
-    const elements = document.elementsFromPoint(point.x, point.y);
-    for (const el of elements) {
-      if (el instanceof HTMLElement) {
-        // Check if it's a link or button
-        if (el.tagName === 'A' || el.tagName === 'BUTTON') {
-          // Make sure it's within a placed block
-          for (const zone of Object.keys(placedBlockRefs.current)) {
-            const ref = placedBlockRefs.current[zone];
-            if (ref?.current?.contains(el)) {
+    // Check each placed block for interactive elements at this point
+    for (const zone of Object.keys(placedBlockRefs.current)) {
+      const ref = placedBlockRefs.current[zone];
+      if (ref?.current) {
+        // Find all links and buttons within this placed block
+        const interactiveElements = ref.current.querySelectorAll('a, button');
+        for (const el of interactiveElements) {
+          if (el instanceof HTMLElement) {
+            const rect = el.getBoundingClientRect();
+            // Check if point is within this element's bounds
+            if (
+              point.x >= rect.left &&
+              point.x <= rect.right &&
+              point.y >= rect.top &&
+              point.y <= rect.bottom
+            ) {
               return el;
             }
           }
@@ -342,9 +349,16 @@ export function BorderFrame() {
         }
         isAnimatingToCenter.current = false;
 
-        // Check if touch started in a placed block - if so, don't set up for drag
+        // Clear any previous hover state
+        setTouchHoveredElement(null);
+        setHoveredLinkRect(null);
+
+        // Check if touch started in a placed block - if so, mark as started in block
+        // but still allow hover tracking
         if (isPointInPlacedBlock(startPos)) {
           setTouchStartPos(null); // Mark as not a drag candidate
+          // Immediately check for hover state at start position
+          updateTouchHoverState(startPos);
           return;
         }
 
@@ -377,19 +391,21 @@ export function BorderFrame() {
           const zone = getZoneFromDrag(touchStartPos, currentPos);
           setMobileActiveZone(zone);
 
-          // Smooth cursor movement - use lerp for smoother tracking
-          const maxOffset = Math.min(window.innerWidth, window.innerHeight) * 0.35;
-          const sensitivity = 0.8; // Higher = more responsive
-          const targetOffsetX = Math.max(-maxOffset, Math.min(maxOffset, deltaX * sensitivity));
-          const targetOffsetY = Math.max(-maxOffset, Math.min(maxOffset, deltaY * sensitivity));
+          // Allow cursor to move anywhere on screen - no offset limit
+          // Calculate target based on drag distance from center
+          const sensitivity = 1.2; // Higher = more responsive
+          const targetX = viewportCenter.x + deltaX * sensitivity;
+          const targetY = viewportCenter.y + deltaY * sensitivity;
 
-          const targetX = viewportCenter.x + targetOffsetX;
-          const targetY = viewportCenter.y + targetOffsetY;
+          // Clamp to viewport bounds with small padding
+          const padding = 20;
+          const clampedX = Math.max(padding, Math.min(window.innerWidth - padding, targetX));
+          const clampedY = Math.max(padding, Math.min(window.innerHeight - padding, targetY));
 
-          // Smooth interpolation toward target (lerp factor 0.3 for smooth following)
+          // Smooth interpolation toward target (lerp factor 0.4 for smooth following)
           setMobilePosition(prev => ({
-            x: prev.x + (targetX - prev.x) * 0.3,
-            y: prev.y + (targetY - prev.y) * 0.3,
+            x: prev.x + (clampedX - prev.x) * 0.4,
+            y: prev.y + (clampedY - prev.y) * 0.4,
           }));
         }
       }
