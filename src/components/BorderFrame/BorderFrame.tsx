@@ -114,37 +114,35 @@ export function BorderFrame() {
     return false;
   }, []);
 
-  // Find interactive element (link or button) at a given point
+  // Find interactive element (link or button) at a given point in placed blocks
   const getInteractiveElementAtPoint = useCallback((point: MousePosition): HTMLElement | null => {
-    // Query ALL interactive elements in the document that are within placed blocks
-    // This is more reliable than using refs
-    const allLinks = document.querySelectorAll('a[href], button');
+    // Check each placed block for interactive elements
+    for (const zone of Object.keys(placedBlocks)) {
+      const ref = placedBlockRefs.current[zone];
+      if (ref?.current) {
+        const links = ref.current.querySelectorAll('a, button');
+        for (const el of links) {
+          if (el instanceof HTMLElement) {
+            const rect = el.getBoundingClientRect();
+            // Skip elements with zero size
+            if (rect.width === 0 || rect.height === 0) continue;
 
-    for (const el of allLinks) {
-      if (el instanceof HTMLElement) {
-        const rect = el.getBoundingClientRect();
-        // Check if point is within this element's bounds with a small tolerance
-        const tolerance = 5;
-        if (
-          point.x >= rect.left - tolerance &&
-          point.x <= rect.right + tolerance &&
-          point.y >= rect.top - tolerance &&
-          point.y <= rect.bottom + tolerance
-        ) {
-          // Verify this element is within a placed block container
-          const isInPlacedBlock = Object.keys(placedBlockRefs.current).some(zone => {
-            const ref = placedBlockRefs.current[zone];
-            return ref?.current?.contains(el);
-          });
-
-          if (isInPlacedBlock) {
-            return el;
+            // Check if point is within bounds with tolerance
+            const tolerance = 10;
+            if (
+              point.x >= rect.left - tolerance &&
+              point.x <= rect.right + tolerance &&
+              point.y >= rect.top - tolerance &&
+              point.y <= rect.bottom + tolerance
+            ) {
+              return el;
+            }
           }
         }
       }
     }
     return null;
-  }, []);
+  }, [placedBlocks]);
 
   // Update hover state for touch-hovered element
   const updateTouchHoverState = useCallback((point: MousePosition) => {
@@ -525,11 +523,17 @@ export function BorderFrame() {
 
   useEffect(() => {
     if (textBlockRef.current && showFloatingBlock) {
-      setTextBlockRect(textBlockRef.current.getBoundingClientRect());
+      // Use requestAnimationFrame to ensure the DOM has updated before measuring
+      const measureId = requestAnimationFrame(() => {
+        if (textBlockRef.current) {
+          setTextBlockRect(textBlockRef.current.getBoundingClientRect());
+        }
+      });
+      return () => cancelAnimationFrame(measureId);
     } else {
       setTextBlockRect(null);
     }
-  }, [currentPosition, showFloatingBlock]);
+  }, [currentPosition, showFloatingBlock, content]);
 
   // Clear "just placed" state after a delay to allow interactions
   useEffect(() => {
