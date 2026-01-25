@@ -378,11 +378,11 @@ export function BorderFrame() {
         const touch = e.touches[0];
         const currentPos = { x: touch.clientX, y: touch.clientY };
 
-        // Always check for interactive elements under touch point (for hover effect)
-        updateTouchHoverState(currentPos);
-
-        // If no touchStartPos, we started on a placed block - just track hover state
-        if (!touchStartPos) return;
+        // If no touchStartPos, we started on a placed block - just track hover state using touch position
+        if (!touchStartPos) {
+          updateTouchHoverState(currentPos);
+          return;
+        }
 
         const deltaX = currentPos.x - touchStartPos.x;
         const deltaY = currentPos.y - touchStartPos.y;
@@ -407,11 +407,16 @@ export function BorderFrame() {
           const clampedX = Math.max(padding, Math.min(window.innerWidth - padding, targetX));
           const clampedY = Math.max(padding, Math.min(window.innerHeight - padding, targetY));
 
-          // Smooth interpolation toward target (lerp factor 0.4 for smooth following)
-          setMobilePosition(prev => ({
-            x: prev.x + (clampedX - prev.x) * 0.4,
-            y: prev.y + (clampedY - prev.y) * 0.4,
-          }));
+          // Calculate new mobile position with smooth interpolation
+          const newMobileX = mobilePosition.x + (clampedX - mobilePosition.x) * 0.4;
+          const newMobileY = mobilePosition.y + (clampedY - mobilePosition.y) * 0.4;
+          const newMobilePos = { x: newMobileX, y: newMobileY };
+
+          // Update mobile position
+          setMobilePosition(newMobilePos);
+
+          // Check for interactive elements at the X CENTER (mobilePosition), not touch position
+          updateTouchHoverState(newMobilePos);
         }
       }
     };
@@ -429,8 +434,9 @@ export function BorderFrame() {
       const touch = e.changedTouches[0];
       const endPos = { x: touch.clientX, y: touch.clientY };
 
-      // Check if we're hovering an interactive element at release point
-      const hoveredElement = getInteractiveElementAtPoint(endPos);
+      // Use mobilePosition (X center) to check for interactive elements, not touch position
+      // This ensures the X crosshair center is what triggers hover/activation
+      const hoveredElementAtXCenter = getInteractiveElementAtPoint(mobilePosition);
 
       // Clear hover state
       setTouchHoveredElement(null);
@@ -438,18 +444,18 @@ export function BorderFrame() {
 
       // If touchStartPos is null, this was a touch that started on a placed block
       if (!touchStartPos) {
-        // If we ended on an interactive element, activate it
-        if (hoveredElement) {
-          activateTouchHoveredElement(hoveredElement, endPos);
+        // If the X center is over an interactive element, activate it
+        if (hoveredElementAtXCenter) {
+          activateTouchHoveredElement(hoveredElementAtXCenter, mobilePosition);
         }
         return;
       }
 
       if (isDragging) {
-        // Check if we ended the drag over an interactive element
-        if (hoveredElement) {
-          // Activate the element we're hovering over
-          activateTouchHoveredElement(hoveredElement, endPos);
+        // Check if the X center is over an interactive element when drag ends
+        if (hoveredElementAtXCenter) {
+          // Activate the element the X center is hovering over
+          activateTouchHoveredElement(hoveredElementAtXCenter, mobilePosition);
           // Animate back to center
           isAnimatingToCenter.current = true;
           animateMobilePosition(mobilePosition, viewportCenter, CURSOR_RETURN_DURATION, () => {
