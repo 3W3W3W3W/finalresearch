@@ -21,7 +21,7 @@ type PlacedBlocks = {
 };
 
 // Threshold for distinguishing tap from drag (in pixels) - lower = more sensitive
-const TAP_THRESHOLD = 3;
+const TAP_THRESHOLD = 2;
 // Duration for cursor return animation (ms)
 const CURSOR_RETURN_DURATION = 200;
 
@@ -46,6 +46,7 @@ export function BorderFrame() {
   const [viewportCenter, setViewportCenter] = useState<MousePosition>({ x: 0, y: 0 });
   const mobileAnimationRef = useRef<number | null>(null);
   const isAnimatingToCenter = useRef(false);
+  const [touchHoveredElement, setTouchHoveredElement] = useState<HTMLElement | null>(null);
 
   // Detect mobile and set initial center position
   useEffect(() => {
@@ -113,6 +114,39 @@ export function BorderFrame() {
     return false;
   }, []);
 
+  // Find interactive element (link or button) at a given point
+  const getInteractiveElementAtPoint = useCallback((point: MousePosition): HTMLElement | null => {
+    const elements = document.elementsFromPoint(point.x, point.y);
+    for (const el of elements) {
+      if (el instanceof HTMLElement) {
+        // Check if it's a link or button
+        if (el.tagName === 'A' || el.tagName === 'BUTTON') {
+          // Make sure it's within a placed block
+          for (const zone of Object.keys(placedBlockRefs.current)) {
+            const ref = placedBlockRefs.current[zone];
+            if (ref?.current?.contains(el)) {
+              return el;
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }, []);
+
+  // Update hover state for touch-hovered element
+  const updateTouchHoverState = useCallback((point: MousePosition) => {
+    const element = getInteractiveElementAtPoint(point);
+    setTouchHoveredElement(element);
+
+    if (element) {
+      // Trigger the dimming effect by setting hoveredLinkRect
+      setHoveredLinkRect(element.getBoundingClientRect());
+    } else {
+      setHoveredLinkRect(null);
+    }
+  }, [getInteractiveElementAtPoint]);
+
   // Handle link click on mobile - move cursor to link then back to center
   const handleMobileLinkClick = useCallback((linkRect: DOMRect) => {
     if (!isMobile) return;
@@ -135,6 +169,24 @@ export function BorderFrame() {
       animateMobilePosition(linkCenter, viewportCenter, CURSOR_RETURN_DURATION);
     }, 100);
   }, [isMobile, viewportCenter, animateMobilePosition]);
+
+  // Activate the touch-hovered element (click it)
+  const activateTouchHoveredElement = useCallback((element: HTMLElement, point: MousePosition) => {
+    if (element.tagName === 'A') {
+      const link = element as HTMLAnchorElement;
+      const href = link.href;
+      if (href) {
+        // Trigger mobile link click animation
+        handleMobileLinkClick(element.getBoundingClientRect());
+        // Open the link
+        window.open(href, '_blank');
+      }
+    } else if (element.tagName === 'BUTTON') {
+      // For buttons (like email copy), trigger click
+      handleMobileLinkClick(element.getBoundingClientRect());
+      element.click();
+    }
+  }, [handleMobileLinkClick]);
 
   // Use mobile position/zone when on mobile, otherwise use desktop
   const currentPosition = isMobile ? mobilePosition : mousePosition;
@@ -302,10 +354,16 @@ export function BorderFrame() {
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (!isMobile || !touchStartPos) return;
+      if (!isMobile) return;
       if (e.touches.length > 0) {
         const touch = e.touches[0];
         const currentPos = { x: touch.clientX, y: touch.clientY };
+
+        // Always check for interactive elements under touch point (for hover effect)
+        updateTouchHoverState(currentPos);
+
+        // If no touchStartPos, we started on a placed block - just track hover state
+        if (!touchStartPos) return;
 
         const deltaX = currentPos.x - touchStartPos.x;
         const deltaY = currentPos.y - touchStartPos.y;
@@ -350,25 +408,48 @@ export function BorderFrame() {
       const touch = e.changedTouches[0];
       const endPos = { x: touch.clientX, y: touch.clientY };
 
-      // If touchStartPos is null, this was a tap on a placed block - let the link handle it
+      // Check if we're hovering an interactive element at release point
+      const hoveredElement = getInteractiveElementAtPoint(endPos);
+
+      // Clear hover state
+      setTouchHoveredElement(null);
+      setHoveredLinkRect(null);
+
+      // If touchStartPos is null, this was a touch that started on a placed block
       if (!touchStartPos) {
+        // If we ended on an interactive element, activate it
+        if (hoveredElement) {
+          activateTouchHoveredElement(hoveredElement, endPos);
+        }
         return;
       }
 
       if (isDragging) {
-        // Was a drag - place the content if zone is active and not already placed
-        if (mobileActiveZone && !checkZonePlaced(mobileActiveZone, placedBlocks)) {
-          const zoneContent = getContentForZone(mobileActiveZone);
-          if (zoneContent) {
-            placeBlock(mobileActiveZone, zoneContent, mobilePosition, textBlockRect);
+        // Check if we ended the drag over an interactive element
+        if (hoveredElement) {
+          // Activate the element we're hovering over
+          activateTouchHoveredElement(hoveredElement, endPos);
+          // Animate back to center
+          isAnimatingToCenter.current = true;
+          animateMobilePosition(mobilePosition, viewportCenter, CURSOR_RETURN_DURATION, () => {
+            isAnimatingToCenter.current = false;
+          });
+          setMobileActiveZone(null);
+        } else {
+          // Was a drag - place the content if zone is active and not already placed
+          if (mobileActiveZone && !checkZonePlaced(mobileActiveZone, placedBlocks)) {
+            const zoneContent = getContentForZone(mobileActiveZone);
+            if (zoneContent) {
+              placeBlock(mobileActiveZone, zoneContent, mobilePosition, textBlockRect);
+            }
           }
+          // Smoothly animate crosshair back to center
+          isAnimatingToCenter.current = true;
+          animateMobilePosition(mobilePosition, viewportCenter, CURSOR_RETURN_DURATION, () => {
+            isAnimatingToCenter.current = false;
+          });
+          setMobileActiveZone(null);
         }
-        // Smoothly animate crosshair back to center
-        isAnimatingToCenter.current = true;
-        animateMobilePosition(mobilePosition, viewportCenter, CURSOR_RETURN_DURATION, () => {
-          isAnimatingToCenter.current = false;
-        });
-        setMobileActiveZone(null);
       } else {
         // Was a tap - check if tapping edge area
         const tapZone = getZoneFromTapPosition(endPos);
@@ -408,7 +489,7 @@ export function BorderFrame() {
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [activeZone, content, mousePosition, placedBlocks, isMobile, touchStartPos, isDragging, mobileActiveZone, mobilePosition, viewportCenter, textBlockRect, placeBlock, getZoneFromDrag, getZoneFromTapPosition, animateMobilePosition, isPointInPlacedBlock]);
+  }, [activeZone, content, mousePosition, placedBlocks, isMobile, touchStartPos, isDragging, mobileActiveZone, mobilePosition, viewportCenter, textBlockRect, placeBlock, getZoneFromDrag, getZoneFromTapPosition, animateMobilePosition, isPointInPlacedBlock, updateTouchHoverState, getInteractiveElementAtPoint, activateTouchHoveredElement]);
 
   // Helper function to get content for a zone
   const getContentForZone = (zone: HoverZone): string | null => {
