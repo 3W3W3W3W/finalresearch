@@ -116,24 +116,29 @@ export function BorderFrame() {
 
   // Find interactive element (link or button) at a given point
   const getInteractiveElementAtPoint = useCallback((point: MousePosition): HTMLElement | null => {
-    // Check each placed block for interactive elements at this point
-    for (const zone of Object.keys(placedBlockRefs.current)) {
-      const ref = placedBlockRefs.current[zone];
-      if (ref?.current) {
-        // Find all links and buttons within this placed block
-        const interactiveElements = ref.current.querySelectorAll('a, button');
-        for (const el of interactiveElements) {
-          if (el instanceof HTMLElement) {
-            const rect = el.getBoundingClientRect();
-            // Check if point is within this element's bounds
-            if (
-              point.x >= rect.left &&
-              point.x <= rect.right &&
-              point.y >= rect.top &&
-              point.y <= rect.bottom
-            ) {
-              return el;
-            }
+    // Query ALL interactive elements in the document that are within placed blocks
+    // This is more reliable than using refs
+    const allLinks = document.querySelectorAll('a[href], button');
+
+    for (const el of allLinks) {
+      if (el instanceof HTMLElement) {
+        const rect = el.getBoundingClientRect();
+        // Check if point is within this element's bounds with a small tolerance
+        const tolerance = 5;
+        if (
+          point.x >= rect.left - tolerance &&
+          point.x <= rect.right + tolerance &&
+          point.y >= rect.top - tolerance &&
+          point.y <= rect.bottom + tolerance
+        ) {
+          // Verify this element is within a placed block container
+          const isInPlacedBlock = Object.keys(placedBlockRefs.current).some(zone => {
+            const ref = placedBlockRefs.current[zone];
+            return ref?.current?.contains(el);
+          });
+
+          if (isInPlacedBlock) {
+            return el;
           }
         }
       }
@@ -144,12 +149,14 @@ export function BorderFrame() {
   // Update hover state for touch-hovered element
   const updateTouchHoverState = useCallback((point: MousePosition) => {
     const element = getInteractiveElementAtPoint(point);
-    setTouchHoveredElement(element);
 
     if (element) {
+      setTouchHoveredElement(element);
       // Trigger the dimming effect by setting hoveredLinkRect
-      setHoveredLinkRect(element.getBoundingClientRect());
+      const rect = element.getBoundingClientRect();
+      setHoveredLinkRect(rect);
     } else {
+      setTouchHoveredElement(null);
       setHoveredLinkRect(null);
     }
   }, [getInteractiveElementAtPoint]);
@@ -668,9 +675,9 @@ export function BorderFrame() {
         />
       )}
 
-      {/* Corner lines - always track cursor */}
+      {/* Corner lines - always track cursor, snap to hovered link if any */}
       <CornerLines
-        textBlockRect={textBlockRect}
+        textBlockRect={hoveredLinkRect || textBlockRect}
         cursorPoint={currentPosition}
         isVisible={true}
         isDimmed={isLinkHovered}
