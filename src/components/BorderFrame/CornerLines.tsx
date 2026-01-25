@@ -10,8 +10,10 @@ interface Point {
 interface CornerLinesProps {
   textBlockRect?: DOMRect | null;
   cursorPoint: Point | null;
+  snapPoint?: Point | null; // When set, use this as center for block corners instead of cursorPoint (for link snapping)
   isVisible: boolean;
   isDimmed?: boolean;
+  isMobile?: boolean;
 }
 
 const ANIMATION_DURATION = 150;
@@ -24,7 +26,7 @@ function easeOut(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
 
-export function CornerLines({ textBlockRect, cursorPoint, isVisible, isDimmed = false }: CornerLinesProps) {
+export function CornerLines({ textBlockRect, cursorPoint, snapPoint, isVisible, isDimmed = false, isMobile = false }: CornerLinesProps) {
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
 
   // Animated half-dimensions (from center to edge)
@@ -129,13 +131,19 @@ export function CornerLines({ textBlockRect, cursorPoint, isVisible, isDimmed = 
     { x: viewport.width, y: viewport.height },
   ];
 
-  // Calculate corners based on cursor position + animated dimensions
+  // Use snapPoint (link center) if available, otherwise use cursorPoint for block corners
+  const centerPoint = snapPoint || cursorPoint;
+
+  // Calculate corners based on center point + animated dimensions
   const blockCorners = [
-    { x: cursorPoint.x - animatedHalfWidth, y: cursorPoint.y - animatedHalfHeight }, // top-left
-    { x: cursorPoint.x + animatedHalfWidth, y: cursorPoint.y - animatedHalfHeight }, // top-right
-    { x: cursorPoint.x - animatedHalfWidth, y: cursorPoint.y + animatedHalfHeight }, // bottom-left
-    { x: cursorPoint.x + animatedHalfWidth, y: cursorPoint.y + animatedHalfHeight }, // bottom-right
+    { x: centerPoint.x - animatedHalfWidth, y: centerPoint.y - animatedHalfHeight }, // top-left
+    { x: centerPoint.x + animatedHalfWidth, y: centerPoint.y - animatedHalfHeight }, // top-right
+    { x: centerPoint.x - animatedHalfWidth, y: centerPoint.y + animatedHalfHeight }, // bottom-left
+    { x: centerPoint.x + animatedHalfWidth, y: centerPoint.y + animatedHalfHeight }, // bottom-right
   ];
+
+  // Crosshair size for mobile
+  const crosshairSize = 10;
 
   return (
     <svg
@@ -147,6 +155,7 @@ export function CornerLines({ textBlockRect, cursorPoint, isVisible, isDimmed = 
         overflow: 'visible',
       }}
     >
+      {/* Corner lines from screen corners to block corners */}
       {screenCorners.map((screenCorner, i) => (
         <line
           key={i}
@@ -162,6 +171,37 @@ export function CornerLines({ textBlockRect, cursorPoint, isVisible, isDimmed = 
           }}
         />
       ))}
+      {/* Mobile crosshair cursor at the cursor point (not snap point) */}
+      {isMobile && cursorPoint && (
+        <>
+          {/* Horizontal line of crosshair */}
+          <line
+            x1={cursorPoint.x - crosshairSize}
+            y1={cursorPoint.y}
+            x2={cursorPoint.x + crosshairSize}
+            y2={cursorPoint.y}
+            stroke="var(--foreground)"
+            strokeWidth="1"
+            style={{
+              opacity: isDimmed ? 0.7 : 1,
+              transition: 'opacity 150ms ease-out',
+            }}
+          />
+          {/* Vertical line of crosshair */}
+          <line
+            x1={cursorPoint.x}
+            y1={cursorPoint.y - crosshairSize}
+            x2={cursorPoint.x}
+            y2={cursorPoint.y + crosshairSize}
+            stroke="var(--foreground)"
+            strokeWidth="1"
+            style={{
+              opacity: isDimmed ? 0.7 : 1,
+              transition: 'opacity 150ms ease-out',
+            }}
+          />
+        </>
+      )}
     </svg>
   );
 }

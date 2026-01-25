@@ -273,20 +273,22 @@ export function BorderFrame() {
     return adjustedPosition;
   }, []);
 
-  // Helper to place a block
+  // Helper to place a block - clears all other blocks when placing a new one
   const placeBlock = useCallback((zone: HoverZone, blockContent: string, position: MousePosition, rect: DOMRect | null) => {
     if (!zone || !blockContent) return;
     const adjustedPosition = calculateAdjustedPosition(position, rect);
-    setPlacedBlocks((prev) => ({
-      ...prev,
+    // Clear all existing placed blocks and place only the new one
+    setPlacedBlocks({
       [zone]: {
         position: adjustedPosition,
         content: blockContent,
         zone,
         placedAt: Date.now(),
       },
-    }));
-    setJustPlacedZones((prev) => new Set(prev).add(zone));
+    });
+    // Clear the refs for removed blocks
+    placedBlockRefs.current = {};
+    setJustPlacedZones(new Set([zone]));
   }, [calculateAdjustedPosition]);
 
   // Determine zone from drag direction (mobile)
@@ -689,8 +691,13 @@ export function BorderFrame() {
       <CornerLines
         textBlockRect={hoveredLinkRect || textBlockRect}
         cursorPoint={currentPosition}
+        snapPoint={hoveredLinkRect ? {
+          x: hoveredLinkRect.left + hoveredLinkRect.width / 2,
+          y: hoveredLinkRect.top + hoveredLinkRect.height / 2,
+        } : null}
         isVisible={true}
         isDimmed={isLinkHovered}
+        isMobile={isMobile}
       />
     </div>
   );

@@ -328,10 +328,7 @@ export const HoverTextBlock = forwardRef<HTMLDivElement, HoverTextBlockProps>(
       }
     };
 
-    // Set consistent block widths for corner line snapping
-    // Horizontal zones (top/bottom) have longer text, vertical zones (left/right) have shorter text
-    const blockWidth = isHorizontalZone ? (isMobile ? 350 : 350) : (isMobile ? 120 : 150);
-    const blockMinHeight = isHorizontalZone ? undefined : 40;
+    const blockWidth = isHorizontalZone ? (isMobile ? 350 : 350) : undefined;
 
     return (
       <div
@@ -350,12 +347,6 @@ export const HoverTextBlock = forwardRef<HTMLDivElement, HoverTextBlockProps>(
           width: blockWidth,
           minWidth: blockWidth,
           maxWidth: blockWidth,
-          minHeight: blockMinHeight,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: isHorizontalZone ? 'column' : 'row',
-          textAlign: 'center',
           boxSizing: 'border-box',
         }}
       >
