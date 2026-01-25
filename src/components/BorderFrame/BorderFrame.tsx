@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef, useMemo, useState, useEffect, createRef } from 'react';
+import { useRef, useMemo, useState, useEffect, createRef, useCallback } from 'react';
 import { useMousePosition, MousePosition } from '@/hooks/useMousePosition';
-import { useHoverZone } from '@/hooks/useHoverZone';
+import { useHoverZone, HoverZone } from '@/hooks/useHoverZone';
 import { BorderEdge } from './BorderEdge';
 import { EdgeLabel } from './EdgeLabel';
 import { HoverTextBlock } from './HoverTextBlock';
@@ -20,9 +20,12 @@ type PlacedBlocks = {
   [key in 'top' | 'bottom' | 'left' | 'right']?: PlacedBlock;
 };
 
+// Threshold for distinguishing tap from drag (in pixels)
+const TAP_THRESHOLD = 10;
+
 export function BorderFrame() {
   const mousePosition = useMousePosition();
-  const activeZone = useHoverZone(mousePosition);
+  const desktopActiveZone = useHoverZone(mousePosition);
   const textBlockRef = useRef<HTMLDivElement>(null);
   const [textBlockRect, setTextBlockRect] = useState<DOMRect | null>(null);
   const [isMouseDown, setIsMouseDown] = useState(false);
@@ -30,6 +33,34 @@ export function BorderFrame() {
   const [justPlacedZones, setJustPlacedZones] = useState<Set<string>>(new Set());
   const [hoveredLinkRect, setHoveredLinkRect] = useState<DOMRect | null>(null);
   const placedBlockRefs = useRef<Record<string, React.RefObject<HTMLDivElement | null>>>({});
+
+  // Mobile-specific state
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobilePosition, setMobilePosition] = useState<MousePosition>({ x: 0, y: 0 });
+  const [mobileActiveZone, setMobileActiveZone] = useState<HoverZone>(null);
+  const [touchStartPos, setTouchStartPos] = useState<MousePosition | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [viewportCenter, setViewportCenter] = useState<MousePosition>({ x: 0, y: 0 });
+
+  // Detect mobile and set initial center position
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768 || 'ontouchstart' in window;
+      setIsMobile(mobile);
+      const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+      setViewportCenter(center);
+      if (mobile) {
+        setMobilePosition(center);
+      }
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Use mobile position/zone when on mobile, otherwise use desktop
+  const currentPosition = isMobile ? mobilePosition : mousePosition;
+  const activeZone = isMobile ? mobileActiveZone : desktopActiveZone;
 
   const handleLinkHover = (rect: DOMRect | null) => {
     setHoveredLinkRect(rect);
@@ -70,123 +101,219 @@ export function BorderFrame() {
   // Should show the floating text block on hover (no click required), zone not already placed
   const showFloatingBlock = activeZone && content && !isZonePlaced;
 
+  // Helper to calculate adjusted position within viewport bounds
+  const calculateAdjustedPosition = useCallback((pos: MousePosition, rect: DOMRect | null): MousePosition => {
+    let adjustedPosition = { ...pos };
+    if (rect) {
+      const halfWidth = rect.width / 2;
+      const halfHeight = rect.height / 2;
+      const offset = 5;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      const left = pos.x - halfWidth;
+      const right = pos.x + halfWidth;
+      const top = pos.y - halfHeight;
+      const bottom = pos.y + halfHeight;
+
+      if (left < offset) {
+        adjustedPosition.x = halfWidth + offset;
+      } else if (right > viewportWidth - offset) {
+        adjustedPosition.x = viewportWidth - halfWidth - offset;
+      }
+
+      if (top < offset) {
+        adjustedPosition.y = halfHeight + offset;
+      } else if (bottom > viewportHeight - offset) {
+        adjustedPosition.y = viewportHeight - halfHeight - offset;
+      }
+    }
+    return adjustedPosition;
+  }, []);
+
+  // Helper to place a block
+  const placeBlock = useCallback((zone: HoverZone, blockContent: string, position: MousePosition, rect: DOMRect | null) => {
+    if (!zone || !blockContent) return;
+    const adjustedPosition = calculateAdjustedPosition(position, rect);
+    setPlacedBlocks((prev) => ({
+      ...prev,
+      [zone]: {
+        position: adjustedPosition,
+        content: blockContent,
+        zone,
+        placedAt: Date.now(),
+      },
+    }));
+    setJustPlacedZones((prev) => new Set(prev).add(zone));
+  }, [calculateAdjustedPosition]);
+
+  // Determine zone from drag direction (mobile)
+  const getZoneFromDrag = useCallback((startPos: MousePosition, currentPos: MousePosition): HoverZone => {
+    const deltaX = currentPos.x - startPos.x;
+    const deltaY = currentPos.y - startPos.y;
+    const absDeltaX = Math.abs(deltaX);
+    const absDeltaY = Math.abs(deltaY);
+
+    // Need minimum movement to register a direction
+    if (absDeltaX < TAP_THRESHOLD && absDeltaY < TAP_THRESHOLD) {
+      return null;
+    }
+
+    // Determine primary direction
+    if (absDeltaY > absDeltaX) {
+      return deltaY < 0 ? 'top' : 'bottom';
+    } else {
+      return deltaX < 0 ? 'left' : 'right';
+    }
+  }, []);
+
+  // Determine zone from tap position (mobile) - for tapping edge areas
+  const getZoneFromTapPosition = useCallback((pos: MousePosition): HoverZone => {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const edgeThreshold = 0.25; // 25% from edge
+
+    if (pos.y < vh * edgeThreshold) return 'top';
+    if (pos.y > vh * (1 - edgeThreshold)) return 'bottom';
+    if (pos.x < vw * edgeThreshold) return 'left';
+    if (pos.x > vw * (1 - edgeThreshold)) return 'right';
+    return null; // Center deadzone
+  }, []);
+
   useEffect(() => {
+    // Desktop handlers
     const handleMouseDown = () => {
+      if (isMobile) return;
       setIsMouseDown(true);
     };
 
     const handleMouseUp = () => {
-      // Place the block if we're in a zone that doesn't have one yet
-      // Use the helper to check if content is already placed (top/bottom share content)
+      if (isMobile) return;
       if (activeZone && content && !checkZonePlaced(activeZone, placedBlocks)) {
-        let adjustedPosition = { ...mousePosition };
-
-        // If we have a text block rect, check if it would be outside viewport
-        if (textBlockRect) {
-          const halfWidth = textBlockRect.width / 2;
-          const halfHeight = textBlockRect.height / 2;
-          const offset = 5; // 5px offset from viewport edges
-
-          const viewportWidth = window.innerWidth;
-          const viewportHeight = window.innerHeight;
-
-          // Calculate bounds if placed at mouse position
-          const left = mousePosition.x - halfWidth;
-          const right = mousePosition.x + halfWidth;
-          const top = mousePosition.y - halfHeight;
-          const bottom = mousePosition.y + halfHeight;
-
-          // Adjust position if outside viewport (with 5px offset)
-          if (left < offset) {
-            adjustedPosition.x = halfWidth + offset;
-          } else if (right > viewportWidth - offset) {
-            adjustedPosition.x = viewportWidth - halfWidth - offset;
-          }
-
-          if (top < offset) {
-            adjustedPosition.y = halfHeight + offset;
-          } else if (bottom > viewportHeight - offset) {
-            adjustedPosition.y = viewportHeight - halfHeight - offset;
-          }
-        }
-
-        setPlacedBlocks((prev) => ({
-          ...prev,
-          [activeZone]: {
-            position: adjustedPosition,
-            content,
-            zone: activeZone,
-            placedAt: Date.now(),
-          },
-        }));
-        setJustPlacedZones((prev) => new Set(prev).add(activeZone));
+        placeBlock(activeZone, content, mousePosition, textBlockRect);
       }
       setIsMouseDown(false);
     };
 
-    const handleTouchStart = () => {
-      setIsMouseDown(true);
+    // Mobile handlers
+    const handleTouchStart = (e: TouchEvent) => {
+      if (!isMobile) {
+        setIsMouseDown(true);
+        return;
+      }
+      if (e.touches.length > 0) {
+        const touch = e.touches[0];
+        const startPos = { x: touch.clientX, y: touch.clientY };
+        setTouchStartPos(startPos);
+        setIsDragging(false);
+      }
     };
 
-    const handleTouchEnd = () => {
-      if (activeZone && content && !checkZonePlaced(activeZone, placedBlocks)) {
-        let adjustedPosition = { ...mousePosition };
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isMobile || !touchStartPos) return;
+      if (e.touches.length > 0) {
+        const touch = e.touches[0];
+        const currentPos = { x: touch.clientX, y: touch.clientY };
 
-        // If we have a text block rect, check if it would be outside viewport
-        if (textBlockRect) {
-          const halfWidth = textBlockRect.width / 2;
-          const halfHeight = textBlockRect.height / 2;
-          const offset = 5; // 5px offset from viewport edges
+        const deltaX = Math.abs(currentPos.x - touchStartPos.x);
+        const deltaY = Math.abs(currentPos.y - touchStartPos.y);
 
-          const viewportWidth = window.innerWidth;
-          const viewportHeight = window.innerHeight;
+        if (deltaX > TAP_THRESHOLD || deltaY > TAP_THRESHOLD) {
+          setIsDragging(true);
 
-          // Calculate bounds if placed at mouse position
-          const left = mousePosition.x - halfWidth;
-          const right = mousePosition.x + halfWidth;
-          const top = mousePosition.y - halfHeight;
-          const bottom = mousePosition.y + halfHeight;
+          // Determine zone based on drag direction
+          const zone = getZoneFromDrag(touchStartPos, currentPos);
+          setMobileActiveZone(zone);
 
-          // Adjust position if outside viewport (with 5px offset)
-          if (left < offset) {
-            adjustedPosition.x = halfWidth + offset;
-          } else if (right > viewportWidth - offset) {
-            adjustedPosition.x = viewportWidth - halfWidth - offset;
-          }
+          // Move crosshair in the drag direction but keep it somewhat centered
+          // Move proportionally to drag distance
+          const maxOffset = Math.min(window.innerWidth, window.innerHeight) * 0.3;
+          const offsetX = Math.max(-maxOffset, Math.min(maxOffset, (currentPos.x - touchStartPos.x) * 0.5));
+          const offsetY = Math.max(-maxOffset, Math.min(maxOffset, (currentPos.y - touchStartPos.y) * 0.5));
 
-          if (top < offset) {
-            adjustedPosition.y = halfHeight + offset;
-          } else if (bottom > viewportHeight - offset) {
-            adjustedPosition.y = viewportHeight - halfHeight - offset;
+          setMobilePosition({
+            x: viewportCenter.x + offsetX,
+            y: viewportCenter.y + offsetY,
+          });
+        }
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (!isMobile) {
+        // Desktop touch behavior
+        if (activeZone && content && !checkZonePlaced(activeZone, placedBlocks)) {
+          placeBlock(activeZone, content, mousePosition, textBlockRect);
+        }
+        setIsMouseDown(false);
+        return;
+      }
+
+      if (!touchStartPos) return;
+
+      const touch = e.changedTouches[0];
+      const endPos = { x: touch.clientX, y: touch.clientY };
+
+      if (isDragging) {
+        // Was a drag - place the content if zone is active and not already placed
+        if (mobileActiveZone && !checkZonePlaced(mobileActiveZone, placedBlocks)) {
+          const zoneContent = getContentForZone(mobileActiveZone);
+          if (zoneContent) {
+            placeBlock(mobileActiveZone, zoneContent, mobilePosition, textBlockRect);
           }
         }
+        // Return crosshair to center
+        setMobilePosition(viewportCenter);
+        setMobileActiveZone(null);
+      } else {
+        // Was a tap - check if tapping edge area or placed block
+        const tapZone = getZoneFromTapPosition(endPos);
 
-        setPlacedBlocks((prev) => ({
-          ...prev,
-          [activeZone]: {
-            position: adjustedPosition,
-            content,
-            zone: activeZone,
-            placedAt: Date.now(),
-          },
-        }));
-        setJustPlacedZones((prev) => new Set(prev).add(activeZone));
+        if (tapZone && !checkZonePlaced(tapZone, placedBlocks)) {
+          // Tap on edge area - show and place content
+          const zoneContent = getContentForZone(tapZone);
+          if (zoneContent) {
+            // Briefly show the content at tap position then place it
+            setMobilePosition(endPos);
+            setMobileActiveZone(tapZone);
+            placeBlock(tapZone, zoneContent, endPos, textBlockRect);
+            // Return to center after placing
+            setTimeout(() => {
+              setMobilePosition(viewportCenter);
+              setMobileActiveZone(null);
+            }, 50);
+          }
+        }
+        // If tapping on a placed block, the link click is handled by the HoverTextBlock component
       }
-      setIsMouseDown(false);
+
+      setTouchStartPos(null);
+      setIsDragging(false);
     };
 
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('touchstart', handleTouchStart);
+    window.addEventListener('touchmove', handleTouchMove);
     window.addEventListener('touchend', handleTouchEnd);
 
     return () => {
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [activeZone, content, mousePosition, placedBlocks]);
+  }, [activeZone, content, mousePosition, placedBlocks, isMobile, touchStartPos, isDragging, mobileActiveZone, mobilePosition, viewportCenter, textBlockRect, placeBlock, getZoneFromDrag, getZoneFromTapPosition]);
+
+  // Helper function to get content for a zone
+  const getContentForZone = (zone: HoverZone): string | null => {
+    if (!zone) return null;
+    if (zone === 'top' || zone === 'bottom') return HOVER_CONTENT.topBottom;
+    if (zone === 'left') return HOVER_CONTENT.left;
+    if (zone === 'right') return HOVER_CONTENT.right;
+    return null;
+  };
 
   useEffect(() => {
     if (textBlockRef.current && showFloatingBlock) {
@@ -194,7 +321,7 @@ export function BorderFrame() {
     } else {
       setTextBlockRect(null);
     }
-  }, [mousePosition, showFloatingBlock]);
+  }, [currentPosition, showFloatingBlock]);
 
   // Clear "just placed" state after a delay to allow interactions
   useEffect(() => {
@@ -332,7 +459,7 @@ export function BorderFrame() {
       {showFloatingBlock && (
         <HoverTextBlock
           ref={textBlockRef}
-          position={mousePosition}
+          position={currentPosition}
           content={content}
           zone={activeZone}
           isDragging={true}
@@ -342,7 +469,7 @@ export function BorderFrame() {
       {/* Corner lines - always track cursor */}
       <CornerLines
         textBlockRect={textBlockRect}
-        cursorPoint={mousePosition}
+        cursorPoint={currentPosition}
         isVisible={true}
         isDimmed={isLinkHovered}
       />
