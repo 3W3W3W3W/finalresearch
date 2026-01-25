@@ -11,6 +11,7 @@ interface HoverTextBlockProps {
   isDragging?: boolean;
   onLinkHover?: (rect: DOMRect | null) => void;
   onMobileLinkClick?: (rect: DOMRect) => void;
+  touchHoveredElement?: HTMLElement | null;
 }
 
 interface TextSegment {
@@ -64,10 +65,14 @@ interface RenderSegmentProps {
   copiedIdx?: number;
   onLinkHover?: (rect: DOMRect | null) => void;
   onMobileLinkClick?: (rect: DOMRect) => void;
+  touchHoveredElement?: HTMLElement | null;
 }
 
-function LinkSegment({ segment, idx, isJustPlaced, isDragging, onLinkHover, onMobileLinkClick }: RenderSegmentProps) {
+function LinkSegment({ segment, idx, isJustPlaced, isDragging, onLinkHover, onMobileLinkClick, touchHoveredElement }: RenderSegmentProps) {
   const linkRef = useRef<HTMLAnchorElement>(null);
+  
+  // Check if this element is the one being touch-hovered
+  const isTouchHovered = touchHoveredElement !== null && touchHoveredElement === linkRef.current;
 
   const handleLinkClick = (e: React.MouseEvent) => {
     if (isJustPlaced) return;
@@ -110,6 +115,7 @@ function LinkSegment({ segment, idx, isJustPlaced, isDragging, onLinkHover, onMo
       style={{
         pointerEvents: isJustPlaced || isDragging ? 'none' : 'auto',
         textDecoration: !isDragging ? 'underline' : 'none',
+        opacity: isTouchHovered ? 0.7 : undefined,
       }}
     >
       {segment.content}
@@ -117,8 +123,11 @@ function LinkSegment({ segment, idx, isJustPlaced, isDragging, onLinkHover, onMo
   );
 }
 
-function CallSegment({ segment, idx, isJustPlaced, isDragging, onLinkHover, onMobileLinkClick }: RenderSegmentProps) {
+function CallSegment({ segment, idx, isJustPlaced, isDragging, onLinkHover, onMobileLinkClick, touchHoveredElement }: RenderSegmentProps) {
   const linkRef = useRef<HTMLAnchorElement>(null);
+  
+  // Check if this element is the one being touch-hovered
+  const isTouchHovered = touchHoveredElement !== null && touchHoveredElement === linkRef.current;
 
   const handleLinkClick = (e: React.MouseEvent) => {
     if (isJustPlaced) return;
@@ -158,15 +167,21 @@ function CallSegment({ segment, idx, isJustPlaced, isDragging, onLinkHover, onMo
       className={`${!isDragging ? 'hover:opacity-70' : ''} transition-opacity ${
         isJustPlaced || isDragging ? 'pointer-events-none' : 'cursor-pointer'
       }`}
-      style={{ pointerEvents: isJustPlaced || isDragging ? 'none' : 'auto' }}
+      style={{ 
+        pointerEvents: isJustPlaced || isDragging ? 'none' : 'auto',
+        opacity: isTouchHovered ? 0.7 : undefined,
+      }}
     >
       {segment.content}
     </a>
   );
 }
 
-function EmailSegment({ segment, idx, isJustPlaced, isDragging, onEmailCopied, copiedIdx, onLinkHover, onMobileLinkClick }: RenderSegmentProps) {
+function EmailSegment({ segment, idx, isJustPlaced, isDragging, onEmailCopied, copiedIdx, onLinkHover, onMobileLinkClick, touchHoveredElement }: RenderSegmentProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
+  
+  // Check if this element is the one being touch-hovered
+  const isTouchHovered = touchHoveredElement !== null && touchHoveredElement === buttonRef.current;
 
   const handleCopyEmail = (e: React.MouseEvent) => {
     if (isJustPlaced) return;
@@ -211,6 +226,7 @@ function EmailSegment({ segment, idx, isJustPlaced, isDragging, onEmailCopied, c
           background: 'none',
           border: 'none',
           padding: 0,
+          opacity: isTouchHovered ? 0.7 : undefined,
         }}
       >
         {segment.content}
@@ -255,10 +271,14 @@ interface ResourceLinkProps {
   children: React.ReactNode;
   onLinkHover?: (rect: DOMRect | null) => void;
   onMobileLinkClick?: (rect: DOMRect) => void;
+  touchHoveredElement?: HTMLElement | null;
 }
 
-function ResourceLink({ href, children, onLinkHover, onMobileLinkClick }: ResourceLinkProps) {
+function ResourceLink({ href, children, onLinkHover, onMobileLinkClick, touchHoveredElement }: ResourceLinkProps) {
   const linkRef = useRef<HTMLAnchorElement>(null);
+  
+  // Check if this element is the one being touch-hovered
+  const isTouchHovered = touchHoveredElement !== null && touchHoveredElement === linkRef.current;
 
   const handleClick = (e: React.MouseEvent) => {
     // Trigger mobile cursor movement if callback provided
@@ -286,7 +306,7 @@ function ResourceLink({ href, children, onLinkHover, onMobileLinkClick }: Resour
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      style={{ textDecoration: 'underline' }}
+      style={{ textDecoration: 'underline', opacity: isTouchHovered ? 0.7 : undefined }}
       className="hover:opacity-70 transition-opacity"
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
@@ -298,7 +318,7 @@ function ResourceLink({ href, children, onLinkHover, onMobileLinkClick }: Resour
 }
 
 export const HoverTextBlock = forwardRef<HTMLDivElement, HoverTextBlockProps>(
-  function HoverTextBlock({ position, content, zone, isJustPlaced = false, isDragging = false, onLinkHover, onMobileLinkClick }, ref) {
+  function HoverTextBlock({ position, content, zone, isJustPlaced = false, isDragging = false, onLinkHover, onMobileLinkClick, touchHoveredElement }, ref) {
     const isHorizontalZone = zone === 'top' || zone === 'bottom';
     const segments = parseContent(content);
     const [copiedIdx, setCopiedIdx] = useState<number | undefined>(undefined);
@@ -328,7 +348,10 @@ export const HoverTextBlock = forwardRef<HTMLDivElement, HoverTextBlockProps>(
       }
     };
 
-    const blockWidth = isHorizontalZone ? (isMobile ? 350 : 350) : undefined;
+    // Set consistent block widths for corner line snapping
+    // Horizontal zones (top/bottom) have longer text, vertical zones (left/right) have shorter text
+    const blockWidth = isHorizontalZone ? (isMobile ? 350 : 350) : (isMobile ? 120 : 150);
+    const blockMinHeight = isHorizontalZone ? undefined : 40;
 
     return (
       <div
@@ -347,6 +370,12 @@ export const HoverTextBlock = forwardRef<HTMLDivElement, HoverTextBlockProps>(
           width: blockWidth,
           minWidth: blockWidth,
           maxWidth: blockWidth,
+          minHeight: blockMinHeight,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: isHorizontalZone ? 'column' : 'row',
+          textAlign: 'center',
           boxSizing: 'border-box',
         }}
       >
@@ -360,6 +389,7 @@ export const HoverTextBlock = forwardRef<HTMLDivElement, HoverTextBlockProps>(
             copiedIdx,
             onLinkHover,
             onMobileLinkClick,
+            touchHoveredElement,
           })
         )}
         {/* Resources section - only shown when placed */}
@@ -378,10 +408,10 @@ export const HoverTextBlock = forwardRef<HTMLDivElement, HoverTextBlockProps>(
                 gap: '1rem',
               }}
             >
-              <ResourceLink href="http://are.na/final-research/channels" onLinkHover={onLinkHover} onMobileLinkClick={onMobileLinkClick}>
+              <ResourceLink href="http://are.na/final-research/channels" onLinkHover={onLinkHover} onMobileLinkClick={onMobileLinkClick} touchHoveredElement={touchHoveredElement}>
                 Are.na
               </ResourceLink>
-              <ResourceLink href="https://instagram.com/final.research" onLinkHover={onLinkHover} onMobileLinkClick={onMobileLinkClick}>
+              <ResourceLink href="https://instagram.com/final.research" onLinkHover={onLinkHover} onMobileLinkClick={onMobileLinkClick} touchHoveredElement={touchHoveredElement}>
                 Instagram
               </ResourceLink>
             </div>

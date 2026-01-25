@@ -41,12 +41,18 @@ export function BorderFrame() {
   const [mobilePosition, setMobilePosition] = useState<MousePosition>({ x: 0, y: 0 });
   const [targetMobilePosition, setTargetMobilePosition] = useState<MousePosition>({ x: 0, y: 0 });
   const [mobileActiveZone, setMobileActiveZone] = useState<HoverZone>(null);
-  const [touchStartPos, setTouchStartPos] = useState<MousePosition | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [viewportCenter, setViewportCenter] = useState<MousePosition>({ x: 0, y: 0 });
   const mobileAnimationRef = useRef<number | null>(null);
   const isAnimatingToCenter = useRef(false);
   const [touchHoveredElement, setTouchHoveredElement] = useState<HTMLElement | null>(null);
+  
+  // Use refs for touch state to avoid re-running effects on every touch change
+  const touchStartPosRef = useRef<MousePosition | null>(null);
+  const isDraggingRef = useRef(false);
+  const mobilePositionRef = useRef<MousePosition>({ x: 0, y: 0 });
+  const mobileActiveZoneRef = useRef<HoverZone>(null);
+  const viewportCenterRef = useRef<MousePosition>({ x: 0, y: 0 });
+  const placedBlocksRef = useRef<PlacedBlocks>({});
 
   // Detect mobile and set initial center position
   useEffect(() => {
@@ -55,9 +61,11 @@ export function BorderFrame() {
       setIsMobile(mobile);
       const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
       setViewportCenter(center);
+      viewportCenterRef.current = center;
       setTargetMobilePosition(center);
       if (mobile) {
         setMobilePosition(center);
+        mobilePositionRef.current = center;
       }
     };
     checkMobile();
@@ -81,8 +89,11 @@ export function BorderFrame() {
 
       const newX = from.x + (to.x - from.x) * eased;
       const newY = from.y + (to.y - from.y) * eased;
+      const newPos = { x: newX, y: newY };
 
-      setMobilePosition({ x: newX, y: newY });
+      // Update both ref and state
+      mobilePositionRef.current = newPos;
+      setMobilePosition(newPos);
 
       if (progress < 1) {
         mobileAnimationRef.current = requestAnimationFrame(animate);
@@ -273,22 +284,22 @@ export function BorderFrame() {
     return adjustedPosition;
   }, []);
 
-  // Helper to place a block - clears all other blocks when placing a new one
+  // Helper to place a block
   const placeBlock = useCallback((zone: HoverZone, blockContent: string, position: MousePosition, rect: DOMRect | null) => {
     if (!zone || !blockContent) return;
     const adjustedPosition = calculateAdjustedPosition(position, rect);
-    // Clear all existing placed blocks and place only the new one
-    setPlacedBlocks({
-      [zone]: {
-        position: adjustedPosition,
-        content: blockContent,
-        zone,
-        placedAt: Date.now(),
-      },
+    const newBlock = {
+      position: adjustedPosition,
+      content: blockContent,
+      zone,
+      placedAt: Date.now(),
+    };
+    setPlacedBlocks((prev) => {
+      const updated = { ...prev, [zone]: newBlock };
+      placedBlocksRef.current = updated;
+      return updated;
     });
-    // Clear the refs for removed blocks
-    placedBlockRefs.current = {};
-    setJustPlacedZones(new Set([zone]));
+    setJustPlacedZones((prev) => new Set(prev).add(zone));
   }, [calculateAdjustedPosition]);
 
   // Determine zone from drag direction (mobile)
@@ -324,6 +335,16 @@ export function BorderFrame() {
     return null; // Center deadzone
   }, []);
 
+  // Helper function to get content for a zone - moved before useEffect
+  const getContentForZone = useCallback((zone: HoverZone): string | null => {
+    if (!zone) return null;
+    if (zone === 'top' || zone === 'bottom') return HOVER_CONTENT.topBottom;
+    if (zone === 'left') return HOVER_CONTENT.left;
+    if (zone === 'right') return HOVER_CONTENT.right;
+    return null;
+  }, []);
+
+  // Set up event handlers - use refs to avoid stale closures and re-running effects
   useEffect(() => {
     // Desktop handlers
     const handleMouseDown = () => {
@@ -339,7 +360,7 @@ export function BorderFrame() {
       setIsMouseDown(false);
     };
 
-    // Mobile handlers
+    // Mobile handlers - use refs for touch state to avoid stale closures
     const handleTouchStart = (e: TouchEvent) => {
       if (!isMobile) {
         setIsMouseDown(true);
@@ -363,14 +384,14 @@ export function BorderFrame() {
         // Check if touch started in a placed block - if so, mark as started in block
         // but still allow hover tracking
         if (isPointInPlacedBlock(startPos)) {
-          setTouchStartPos(null); // Mark as not a drag candidate
+          touchStartPosRef.current = null; // Mark as not a drag candidate
           // Immediately check for hover state at start position
           updateTouchHoverState(startPos);
           return;
         }
 
-        setTouchStartPos(startPos);
-        setIsDragging(false);
+        touchStartPosRef.current = startPos;
+        isDraggingRef.current = false;
       }
     };
 
@@ -381,28 +402,28 @@ export function BorderFrame() {
         const currentPos = { x: touch.clientX, y: touch.clientY };
 
         // If no touchStartPos, we started on a placed block - just track hover state using touch position
-        if (!touchStartPos) {
+        if (!touchStartPosRef.current) {
           updateTouchHoverState(currentPos);
           return;
         }
 
-        const deltaX = currentPos.x - touchStartPos.x;
-        const deltaY = currentPos.y - touchStartPos.y;
+        const deltaX = currentPos.x - touchStartPosRef.current.x;
+        const deltaY = currentPos.y - touchStartPosRef.current.y;
         const absDeltaX = Math.abs(deltaX);
         const absDeltaY = Math.abs(deltaY);
 
         if (absDeltaX > TAP_THRESHOLD || absDeltaY > TAP_THRESHOLD) {
-          setIsDragging(true);
+          isDraggingRef.current = true;
 
           // Determine zone based on drag direction
-          const zone = getZoneFromDrag(touchStartPos, currentPos);
+          const zone = getZoneFromDrag(touchStartPosRef.current, currentPos);
+          mobileActiveZoneRef.current = zone;
           setMobileActiveZone(zone);
 
-          // Allow cursor to move anywhere on screen - no offset limit
           // Calculate target based on drag distance from center
-          const sensitivity = 1.2; // Higher = more responsive
-          const targetX = viewportCenter.x + deltaX * sensitivity;
-          const targetY = viewportCenter.y + deltaY * sensitivity;
+          const sensitivity = 1.2;
+          const targetX = viewportCenterRef.current.x + deltaX * sensitivity;
+          const targetY = viewportCenterRef.current.y + deltaY * sensitivity;
 
           // Clamp to viewport bounds with small padding
           const padding = 20;
@@ -410,14 +431,16 @@ export function BorderFrame() {
           const clampedY = Math.max(padding, Math.min(window.innerHeight - padding, targetY));
 
           // Calculate new mobile position with smooth interpolation
-          const newMobileX = mobilePosition.x + (clampedX - mobilePosition.x) * 0.4;
-          const newMobileY = mobilePosition.y + (clampedY - mobilePosition.y) * 0.4;
+          const currentMobilePos = mobilePositionRef.current;
+          const newMobileX = currentMobilePos.x + (clampedX - currentMobilePos.x) * 0.4;
+          const newMobileY = currentMobilePos.y + (clampedY - currentMobilePos.y) * 0.4;
           const newMobilePos = { x: newMobileX, y: newMobileY };
 
-          // Update mobile position
+          // Update mobile position (both ref and state)
+          mobilePositionRef.current = newMobilePos;
           setMobilePosition(newMobilePos);
 
-          // Check for interactive elements at the X CENTER (mobilePosition), not touch position
+          // Check for interactive elements at the cursor position
           updateTouchHoverState(newMobilePos);
         }
       }
@@ -436,64 +459,70 @@ export function BorderFrame() {
       const touch = e.changedTouches[0];
       const endPos = { x: touch.clientX, y: touch.clientY };
 
-      // Use mobilePosition (X center) to check for interactive elements, not touch position
-      // This ensures the X crosshair center is what triggers hover/activation
-      const hoveredElementAtXCenter = getInteractiveElementAtPoint(mobilePosition);
+      // Use current mobile position from ref to check for interactive elements
+      const currentMobilePos = mobilePositionRef.current;
+      const hoveredElementAtXCenter = getInteractiveElementAtPoint(currentMobilePos);
 
       // Clear hover state
       setTouchHoveredElement(null);
       setHoveredLinkRect(null);
 
       // If touchStartPos is null, this was a touch that started on a placed block
-      if (!touchStartPos) {
-        // If the X center is over an interactive element, activate it
+      if (!touchStartPosRef.current) {
+        // If the cursor is over an interactive element, activate it
         if (hoveredElementAtXCenter) {
-          activateTouchHoveredElement(hoveredElementAtXCenter, mobilePosition);
+          activateTouchHoveredElement(hoveredElementAtXCenter, currentMobilePos);
         }
         return;
       }
 
-      if (isDragging) {
-        // Check if the X center is over an interactive element when drag ends
+      if (isDraggingRef.current) {
+        // Check if the cursor is over an interactive element when drag ends
         if (hoveredElementAtXCenter) {
-          // Activate the element the X center is hovering over
-          activateTouchHoveredElement(hoveredElementAtXCenter, mobilePosition);
+          // Activate the element the cursor is hovering over
+          activateTouchHoveredElement(hoveredElementAtXCenter, currentMobilePos);
           // Animate back to center
           isAnimatingToCenter.current = true;
-          animateMobilePosition(mobilePosition, viewportCenter, CURSOR_RETURN_DURATION, () => {
+          animateMobilePosition(currentMobilePos, viewportCenterRef.current, CURSOR_RETURN_DURATION, () => {
             isAnimatingToCenter.current = false;
           });
+          mobileActiveZoneRef.current = null;
           setMobileActiveZone(null);
         } else {
           // Was a drag - place the content if zone is active and not already placed
-          if (mobileActiveZone && !checkZonePlaced(mobileActiveZone, placedBlocks)) {
-            const zoneContent = getContentForZone(mobileActiveZone);
+          const currentZone = mobileActiveZoneRef.current;
+          if (currentZone && !checkZonePlaced(currentZone, placedBlocksRef.current)) {
+            const zoneContent = getContentForZone(currentZone);
             if (zoneContent) {
-              placeBlock(mobileActiveZone, zoneContent, mobilePosition, textBlockRect);
+              placeBlock(currentZone, zoneContent, currentMobilePos, textBlockRect);
             }
           }
           // Smoothly animate crosshair back to center
           isAnimatingToCenter.current = true;
-          animateMobilePosition(mobilePosition, viewportCenter, CURSOR_RETURN_DURATION, () => {
+          animateMobilePosition(currentMobilePos, viewportCenterRef.current, CURSOR_RETURN_DURATION, () => {
             isAnimatingToCenter.current = false;
           });
+          mobileActiveZoneRef.current = null;
           setMobileActiveZone(null);
         }
       } else {
         // Was a tap - check if tapping edge area
         const tapZone = getZoneFromTapPosition(endPos);
 
-        if (tapZone && !checkZonePlaced(tapZone, placedBlocks)) {
+        if (tapZone && !checkZonePlaced(tapZone, placedBlocksRef.current)) {
           // Tap on edge area - show and place content
           const zoneContent = getContentForZone(tapZone);
           if (zoneContent) {
             // Instantly move to tap position
+            mobilePositionRef.current = endPos;
             setMobilePosition(endPos);
+            mobileActiveZoneRef.current = tapZone;
             setMobileActiveZone(tapZone);
             placeBlock(tapZone, zoneContent, endPos, textBlockRect);
             // Smoothly return to center after placing
             setTimeout(() => {
-              animateMobilePosition(endPos, viewportCenter, CURSOR_RETURN_DURATION, () => {
+              animateMobilePosition(endPos, viewportCenterRef.current, CURSOR_RETURN_DURATION, () => {
+                mobileActiveZoneRef.current = null;
                 setMobileActiveZone(null);
               });
             }, 50);
@@ -501,8 +530,9 @@ export function BorderFrame() {
         }
       }
 
-      setTouchStartPos(null);
-      setIsDragging(false);
+      // Reset touch state
+      touchStartPosRef.current = null;
+      isDraggingRef.current = false;
     };
 
     window.addEventListener('mousedown', handleMouseDown);
@@ -518,16 +548,7 @@ export function BorderFrame() {
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [activeZone, content, mousePosition, placedBlocks, isMobile, touchStartPos, isDragging, mobileActiveZone, mobilePosition, viewportCenter, textBlockRect, placeBlock, getZoneFromDrag, getZoneFromTapPosition, animateMobilePosition, isPointInPlacedBlock, updateTouchHoverState, getInteractiveElementAtPoint, activateTouchHoveredElement]);
-
-  // Helper function to get content for a zone
-  const getContentForZone = (zone: HoverZone): string | null => {
-    if (!zone) return null;
-    if (zone === 'top' || zone === 'bottom') return HOVER_CONTENT.topBottom;
-    if (zone === 'left') return HOVER_CONTENT.left;
-    if (zone === 'right') return HOVER_CONTENT.right;
-    return null;
-  };
+  }, [isMobile, activeZone, content, mousePosition, placedBlocks, textBlockRect, placeBlock, getZoneFromDrag, getZoneFromTapPosition, getContentForZone, animateMobilePosition, isPointInPlacedBlock, updateTouchHoverState, getInteractiveElementAtPoint, activateTouchHoveredElement]);
 
   useEffect(() => {
     if (textBlockRef.current && showFloatingBlock) {
@@ -673,6 +694,7 @@ export function BorderFrame() {
           isDragging={false}
           onLinkHover={handleLinkHover}
           onMobileLinkClick={handleMobileLinkClick}
+          touchHoveredElement={touchHoveredElement}
         />
       ))}
 
@@ -691,13 +713,8 @@ export function BorderFrame() {
       <CornerLines
         textBlockRect={hoveredLinkRect || textBlockRect}
         cursorPoint={currentPosition}
-        snapPoint={hoveredLinkRect ? {
-          x: hoveredLinkRect.left + hoveredLinkRect.width / 2,
-          y: hoveredLinkRect.top + hoveredLinkRect.height / 2,
-        } : null}
         isVisible={true}
         isDimmed={isLinkHovered}
-        isMobile={isMobile}
       />
     </div>
   );

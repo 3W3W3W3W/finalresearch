@@ -10,10 +10,8 @@ interface Point {
 interface CornerLinesProps {
   textBlockRect?: DOMRect | null;
   cursorPoint: Point | null;
-  snapPoint?: Point | null; // When set, use this as center for block corners instead of cursorPoint (for link snapping)
   isVisible: boolean;
   isDimmed?: boolean;
-  isMobile?: boolean;
 }
 
 const ANIMATION_DURATION = 150;
@@ -26,7 +24,7 @@ function easeOut(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
 
-export function CornerLines({ textBlockRect, cursorPoint, snapPoint, isVisible, isDimmed = false, isMobile = false }: CornerLinesProps) {
+export function CornerLines({ textBlockRect, cursorPoint, isVisible, isDimmed = false }: CornerLinesProps) {
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
 
   // Animated half-dimensions (from center to edge)
@@ -123,6 +121,9 @@ export function CornerLines({ textBlockRect, cursorPoint, snapPoint, isVisible, 
 
   if (!isVisible || viewport.width === 0) return null;
   if (!cursorPoint) return null;
+  
+  // Don't render if there's no text block (dimensions are 0) - this prevents the "+" crosshair at the center
+  if (animatedHalfWidth === 0 && animatedHalfHeight === 0 && !textBlockRect) return null;
 
   const screenCorners = [
     { x: 0, y: 0 },
@@ -131,19 +132,13 @@ export function CornerLines({ textBlockRect, cursorPoint, snapPoint, isVisible, 
     { x: viewport.width, y: viewport.height },
   ];
 
-  // Use snapPoint (link center) if available, otherwise use cursorPoint for block corners
-  const centerPoint = snapPoint || cursorPoint;
-
-  // Calculate corners based on center point + animated dimensions
+  // Calculate corners based on cursor position + animated dimensions
   const blockCorners = [
-    { x: centerPoint.x - animatedHalfWidth, y: centerPoint.y - animatedHalfHeight }, // top-left
-    { x: centerPoint.x + animatedHalfWidth, y: centerPoint.y - animatedHalfHeight }, // top-right
-    { x: centerPoint.x - animatedHalfWidth, y: centerPoint.y + animatedHalfHeight }, // bottom-left
-    { x: centerPoint.x + animatedHalfWidth, y: centerPoint.y + animatedHalfHeight }, // bottom-right
+    { x: cursorPoint.x - animatedHalfWidth, y: cursorPoint.y - animatedHalfHeight }, // top-left
+    { x: cursorPoint.x + animatedHalfWidth, y: cursorPoint.y - animatedHalfHeight }, // top-right
+    { x: cursorPoint.x - animatedHalfWidth, y: cursorPoint.y + animatedHalfHeight }, // bottom-left
+    { x: cursorPoint.x + animatedHalfWidth, y: cursorPoint.y + animatedHalfHeight }, // bottom-right
   ];
-
-  // Crosshair size for mobile
-  const crosshairSize = 10;
 
   return (
     <svg
@@ -155,7 +150,6 @@ export function CornerLines({ textBlockRect, cursorPoint, snapPoint, isVisible, 
         overflow: 'visible',
       }}
     >
-      {/* Corner lines from screen corners to block corners */}
       {screenCorners.map((screenCorner, i) => (
         <line
           key={i}
@@ -171,37 +165,6 @@ export function CornerLines({ textBlockRect, cursorPoint, snapPoint, isVisible, 
           }}
         />
       ))}
-      {/* Mobile crosshair cursor at the cursor point (not snap point) */}
-      {isMobile && cursorPoint && (
-        <>
-          {/* Horizontal line of crosshair */}
-          <line
-            x1={cursorPoint.x - crosshairSize}
-            y1={cursorPoint.y}
-            x2={cursorPoint.x + crosshairSize}
-            y2={cursorPoint.y}
-            stroke="var(--foreground)"
-            strokeWidth="1"
-            style={{
-              opacity: isDimmed ? 0.7 : 1,
-              transition: 'opacity 150ms ease-out',
-            }}
-          />
-          {/* Vertical line of crosshair */}
-          <line
-            x1={cursorPoint.x}
-            y1={cursorPoint.y - crosshairSize}
-            x2={cursorPoint.x}
-            y2={cursorPoint.y + crosshairSize}
-            stroke="var(--foreground)"
-            strokeWidth="1"
-            style={{
-              opacity: isDimmed ? 0.7 : 1,
-              transition: 'opacity 150ms ease-out',
-            }}
-          />
-        </>
-      )}
     </svg>
   );
 }
