@@ -745,7 +745,7 @@ export function BorderFrame() {
       ))}
 
       {/* Cursor-following text block - shows on hover, click to place */}
-      {showFloatingBlock && (
+      {showFloatingBlock && activeZone && (
         <HoverTextBlock
           ref={textBlockRef}
           position={currentPosition}
