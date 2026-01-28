@@ -16,6 +16,7 @@ export default function RootLayout({
           name="viewport"
           content="width=device-width, initial-scale=1, viewport-fit=cover"
         />
+        <meta name="theme-color" content="#000000" />
       </head>
       <body
         className={`antialiased`}

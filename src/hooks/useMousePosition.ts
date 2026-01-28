@@ -9,10 +9,14 @@ export interface MousePosition {
 
 export function useMousePosition(): MousePosition {
   const [position, setPosition] = useState<MousePosition>({ x: 0, y: 0 });
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   useEffect(() => {
-    // Initialize position to center of viewport
-    setPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+    // Initialize position to center of viewport on first render
+    if (!hasInitialized) {
+      setPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+      setHasInitialized(true);
+    }
 
     const handleMouseMove = (event: MouseEvent) => {
       setPosition({ x: event.clientX, y: event.clientY });
@@ -31,7 +35,7 @@ export function useMousePosition(): MousePosition {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('touchmove', handleTouchMove);
     };
-  }, []);
+  }, [hasInitialized]);
 
   return position;
 }

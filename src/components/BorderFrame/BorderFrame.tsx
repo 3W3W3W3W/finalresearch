@@ -49,6 +49,18 @@ export function BorderFrame() {
   // Inactivity dimming state
   const [isUIDimmed, setIsUIDimmed] = useState(true); // Start dimmed
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Track if user has moved their mouse/touch yet (for initial page state)
+  const [hasUserMoved, setHasUserMoved] = useState(false);
+  const hasUserMovedRef = useRef(false);
+
+  // Edge label refs and hidden state
+  const edgeLabelRefs = useRef({
+    top: createRef<HTMLSpanElement>(),
+    left: createRef<HTMLSpanElement>(),
+    right: createRef<HTMLSpanElement>(),
+  });
+  const [hiddenEdgeLabels, setHiddenEdgeLabels] = useState<Set<string>>(new Set());
   
   // Use refs for touch state to avoid re-running effects on every touch change
   const touchStartPosRef = useRef<MousePosition | null>(null);
@@ -93,10 +105,20 @@ export function BorderFrame() {
   // Track actual user movement with event listeners to reset inactivity timer
   useEffect(() => {
     const handleMouseMove = () => {
+      // Mark that user has moved on first interaction
+      if (!hasUserMovedRef.current) {
+        hasUserMovedRef.current = true;
+        setHasUserMoved(true);
+      }
       resetInactivityTimer();
     };
 
     const handleTouchMoveForTimer = () => {
+      // Mark that user has moved on first interaction
+      if (!hasUserMovedRef.current) {
+        hasUserMovedRef.current = true;
+        setHasUserMoved(true);
+      }
       resetInactivityTimer();
     };
 
@@ -254,6 +276,11 @@ export function BorderFrame() {
   // Use mobile position/zone when on mobile, otherwise use desktop
   const currentPosition = isMobile ? mobilePosition : mousePosition;
   let activeZone = isMobile ? mobileActiveZone : desktopActiveZone;
+
+  // On desktop, disable any zone until user first moves their mouse
+  if (!isMobile && !hasUserMoved) {
+    activeZone = null;
+  }
 
   // Deadzone: if cursor is over a placed block, don't trigger any zone
   const isOverPlacedBlock = useMemo(() => {
@@ -719,6 +746,48 @@ export function BorderFrame() {
     return () => clearTimeout(timeoutId);
   }, [justPlacedZones]);
 
+  // Check for overlaps between placed blocks and edge labels
+  useEffect(() => {
+    const checkOverlaps = () => {
+      const newHiddenLabels = new Set<string>();
+
+      // Check each placed block against each edge label
+      Object.entries(placedBlocks).forEach(([zone, block]) => {
+        const blockRef = placedBlockRefs.current[zone];
+        if (!blockRef?.current) return;
+
+        const blockRect = blockRef.current.getBoundingClientRect();
+
+        // Check against each edge label
+        (['top', 'left', 'right'] as const).forEach((labelPosition) => {
+          const labelRef = edgeLabelRefs.current[labelPosition];
+          if (!labelRef?.current) return;
+
+          const labelRect = labelRef.current.getBoundingClientRect();
+
+          // Check if rectangles overlap
+          const overlaps = !(
+            blockRect.right < labelRect.left ||
+            blockRect.left > labelRect.right ||
+            blockRect.bottom < labelRect.top ||
+            blockRect.top > labelRect.bottom
+          );
+
+          if (overlaps) {
+            newHiddenLabels.add(labelPosition);
+          }
+        });
+      });
+
+      setHiddenEdgeLabels(newHiddenLabels);
+    };
+
+    // Run check after blocks are rendered
+    const timeoutId = setTimeout(checkOverlaps, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [placedBlocks]);
+
   return (
     <div
       className="fixed inset-0 pointer-events-none"
@@ -735,9 +804,24 @@ export function BorderFrame() {
       <BorderEdge position="right" isActive={activeZone === 'right'} isPlaced={!!placedBlocks.right} isDimmed={shouldDimEdge('right')} />
 
       {/* Edge labels */}
-      <EdgeLabel position="top" isDimmed={shouldDimEdgeLabel('top')} />
-      <EdgeLabel position="left" isDimmed={shouldDimEdgeLabel('left')} />
-      <EdgeLabel position="right" isDimmed={shouldDimEdgeLabel('right')} />
+      <EdgeLabel
+        ref={edgeLabelRefs.current.top}
+        position="top"
+        isDimmed={shouldDimEdgeLabel('top')}
+        isHidden={hiddenEdgeLabels.has('top')}
+      />
+      <EdgeLabel
+        ref={edgeLabelRefs.current.left}
+        position="left"
+        isDimmed={shouldDimEdgeLabel('left')}
+        isHidden={hiddenEdgeLabels.has('left')}
+      />
+      <EdgeLabel
+        ref={edgeLabelRefs.current.right}
+        position="right"
+        isDimmed={shouldDimEdgeLabel('right')}
+        isHidden={hiddenEdgeLabels.has('right')}
+      />
 
       {/* Placed text blocks - permanently visible after release */}
       {Object.values(placedBlocks).map((block) => (
