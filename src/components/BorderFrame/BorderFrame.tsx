@@ -602,14 +602,17 @@ export function BorderFrame() {
             setMobilePosition(endPos);
             mobileActiveZoneRef.current = tapZone;
             setMobileActiveZone(tapZone);
-            placeBlock(tapZone, zoneContent, endPos, textBlockRect);
-            // Smoothly return to center after placing
+            // Brief delay to allow React to render the dimming effect before placing
             setTimeout(() => {
-              animateMobilePosition(endPos, viewportCenterRef.current, CURSOR_RETURN_DURATION, () => {
-                mobileActiveZoneRef.current = null;
-                setMobileActiveZone(null);
-              });
-            }, 50);
+              placeBlock(tapZone, zoneContent, endPos, textBlockRect);
+              // Smoothly return to center after placing
+              setTimeout(() => {
+                animateMobilePosition(endPos, viewportCenterRef.current, CURSOR_RETURN_DURATION, () => {
+                  mobileActiveZoneRef.current = null;
+                  setMobileActiveZone(null);
+                });
+              }, 50);
+            }, 100);
           }
         }
       }
