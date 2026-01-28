@@ -168,7 +168,7 @@ function CallSegment({ segment, idx, isJustPlaced, isDragging, onLinkHover, onMo
       className={`${!isDragging ? 'hover:opacity-70' : ''} transition-opacity ${
         isJustPlaced || isDragging ? 'pointer-events-none' : 'cursor-pointer'
       }`}
-      style={{ 
+      style={{
         pointerEvents: isJustPlaced || isDragging ? 'none' : 'auto',
         opacity: isTouchHovered ? 0.7 : undefined,
       }}

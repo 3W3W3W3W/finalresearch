@@ -12,6 +12,16 @@
   --font-size-xs--line-height: 1rem;
 }
 
+* {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+html {
+  -ms-overflow-style: none;
+}
+
 html,
 body {
   height: 100vh;
@@ -19,6 +29,15 @@ body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Hide scrollbars */
+::-webkit-scrollbar {
+  display: none;
 }
 
 body {
@@ -48,4 +67,3 @@ a {
     --text-xs: 0.75rem;
   }
 }
-

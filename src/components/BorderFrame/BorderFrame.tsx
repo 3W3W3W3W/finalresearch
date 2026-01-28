@@ -280,6 +280,16 @@ export function BorderFrame() {
     return isUIDimmed || isLinkHovered;
   };
 
+  // Helper for edge labels - doesn't dim on link hover
+  const shouldDimEdgeLabel = (position: 'top' | 'bottom' | 'left' | 'right'): boolean => {
+    // If hovering an edge that's not placed, dim the OTHER edges
+    if (showFloatingBlock && activeZone && activeZone !== position) {
+      return true;
+    }
+    // Otherwise, only use inactivity dimming (not link hover)
+    return isUIDimmed;
+  };
+
   // Create or get ref for a placed block
   const getPlacedBlockRef = (zone: string): React.RefObject<HTMLDivElement | null> => {
     if (!placedBlockRefs.current[zone]) {
@@ -725,9 +735,9 @@ export function BorderFrame() {
       <BorderEdge position="right" isActive={activeZone === 'right'} isPlaced={!!placedBlocks.right} isDimmed={shouldDimEdge('right')} />
 
       {/* Edge labels */}
-      <EdgeLabel position="top" isDimmed={shouldDimEdge('top')} />
-      <EdgeLabel position="left" isDimmed={shouldDimEdge('left')} />
-      <EdgeLabel position="right" isDimmed={shouldDimEdge('right')} />
+      <EdgeLabel position="top" isDimmed={shouldDimEdgeLabel('top')} />
+      <EdgeLabel position="left" isDimmed={shouldDimEdgeLabel('left')} />
+      <EdgeLabel position="right" isDimmed={shouldDimEdgeLabel('right')} />
 
       {/* Placed text blocks - permanently visible after release */}
       {Object.values(placedBlocks).map((block) => (
