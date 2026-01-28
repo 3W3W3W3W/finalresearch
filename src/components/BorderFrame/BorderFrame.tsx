@@ -90,24 +90,28 @@ export function BorderFrame() {
     }, 2000);
   }, []);
 
-  // Track mouse/touch movement to reset inactivity timer
-  const isInitialMount = useRef(true);
-
+  // Track actual user movement with event listeners to reset inactivity timer
   useEffect(() => {
-    // Don't undim on initial mount - keep starting at 50% opacity
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
+    const handleMouseMove = () => {
+      resetInactivityTimer();
+    };
 
-    resetInactivityTimer();
+    const handleTouchMoveForTimer = () => {
+      resetInactivityTimer();
+    };
+
+    // Add listeners for actual user movement
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('touchmove', handleTouchMoveForTimer, { passive: true });
 
     return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('touchmove', handleTouchMoveForTimer);
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
       }
     };
-  }, [mousePosition, mobilePosition, resetInactivityTimer]);
+  }, [resetInactivityTimer]);
 
   // Smooth animation for mobile cursor returning to center
   const animateMobilePosition = useCallback((from: MousePosition, to: MousePosition, duration: number, onComplete?: () => void) => {
@@ -265,6 +269,16 @@ export function BorderFrame() {
   };
 
   const isLinkHovered = hoveredLinkRect !== null;
+
+  // Helper to determine if a specific edge/label should be dimmed
+  const shouldDimEdge = (position: 'top' | 'bottom' | 'left' | 'right'): boolean => {
+    // If hovering an edge that's not placed, dim the OTHER edges
+    if (showFloatingBlock && activeZone && activeZone !== position) {
+      return true;
+    }
+    // Otherwise, use normal dimming logic
+    return isUIDimmed || isLinkHovered;
+  };
 
   // Create or get ref for a placed block
   const getPlacedBlockRef = (zone: string): React.RefObject<HTMLDivElement | null> => {
@@ -519,45 +533,25 @@ export function BorderFrame() {
 
       // If touchStartPos is null, this was a touch that started on a placed block
       if (!touchStartPosRef.current) {
-        // Check if mobile position is over a link at release
-        const linkAtCenter = getInteractiveElementAtPoint(currentMobilePos);
-        if (linkAtCenter) {
-          activateTouchHoveredElement(linkAtCenter, currentMobilePos);
-        }
         return;
       }
 
       if (isDraggingRef.current) {
-        // Check if mobile position (center crosshair) is over a link when drag ends
-        const linkAtCenter = getInteractiveElementAtPoint(currentMobilePos);
-
-        if (linkAtCenter) {
-          // Link click: activate the link
-          activateTouchHoveredElement(linkAtCenter, currentMobilePos);
-          // Animate back to center
-          isAnimatingToCenter.current = true;
-          animateMobilePosition(currentMobilePos, viewportCenterRef.current, CURSOR_RETURN_DURATION, () => {
-            isAnimatingToCenter.current = false;
-          });
-          mobileActiveZoneRef.current = null;
-          setMobileActiveZone(null);
-        } else {
-          // No link: place content if zone is active and not already placed
-          const currentZone = mobileActiveZoneRef.current;
-          if (currentZone && !checkZonePlaced(currentZone, placedBlocksRef.current)) {
-            const zoneContent = getContentForZone(currentZone);
-            if (zoneContent) {
-              placeBlock(currentZone, zoneContent, currentMobilePos, textBlockRect);
-            }
+        // Was a drag - place content if zone is active and not already placed
+        const currentZone = mobileActiveZoneRef.current;
+        if (currentZone && !checkZonePlaced(currentZone, placedBlocksRef.current)) {
+          const zoneContent = getContentForZone(currentZone);
+          if (zoneContent) {
+            placeBlock(currentZone, zoneContent, currentMobilePos, textBlockRect);
           }
-          // Smoothly animate crosshair back to center
-          isAnimatingToCenter.current = true;
-          animateMobilePosition(currentMobilePos, viewportCenterRef.current, CURSOR_RETURN_DURATION, () => {
-            isAnimatingToCenter.current = false;
-          });
-          mobileActiveZoneRef.current = null;
-          setMobileActiveZone(null);
         }
+        // Smoothly animate crosshair back to center
+        isAnimatingToCenter.current = true;
+        animateMobilePosition(currentMobilePos, viewportCenterRef.current, CURSOR_RETURN_DURATION, () => {
+          isAnimatingToCenter.current = false;
+        });
+        mobileActiveZoneRef.current = null;
+        setMobileActiveZone(null);
       } else {
         // Was a tap - check if tapping edge area
         const tapZone = getZoneFromTapPosition(endPos);
@@ -725,15 +719,15 @@ export function BorderFrame() {
       }}
     >
       {/* Border edges */}
-      <BorderEdge position="top" isActive={activeZone === 'top'} isPlaced={!!placedBlocks.top || !!placedBlocks.bottom} isDimmed={isUIDimmed || isLinkHovered} />
-      <BorderEdge position="bottom" isActive={activeZone === 'bottom'} isPlaced={!!placedBlocks.top || !!placedBlocks.bottom} isDimmed={isUIDimmed || isLinkHovered} />
-      <BorderEdge position="left" isActive={activeZone === 'left'} isPlaced={!!placedBlocks.left} isDimmed={isUIDimmed || isLinkHovered} />
-      <BorderEdge position="right" isActive={activeZone === 'right'} isPlaced={!!placedBlocks.right} isDimmed={isUIDimmed || isLinkHovered} />
+      <BorderEdge position="top" isActive={activeZone === 'top'} isPlaced={!!placedBlocks.top || !!placedBlocks.bottom} isDimmed={shouldDimEdge('top')} />
+      <BorderEdge position="bottom" isActive={activeZone === 'bottom'} isPlaced={!!placedBlocks.top || !!placedBlocks.bottom} isDimmed={shouldDimEdge('bottom')} />
+      <BorderEdge position="left" isActive={activeZone === 'left'} isPlaced={!!placedBlocks.left} isDimmed={shouldDimEdge('left')} />
+      <BorderEdge position="right" isActive={activeZone === 'right'} isPlaced={!!placedBlocks.right} isDimmed={shouldDimEdge('right')} />
 
       {/* Edge labels */}
-      <EdgeLabel position="top" isDimmed={isUIDimmed || isLinkHovered} />
-      <EdgeLabel position="left" isDimmed={isUIDimmed || isLinkHovered} />
-      <EdgeLabel position="right" isDimmed={isUIDimmed || isLinkHovered} />
+      <EdgeLabel position="top" isDimmed={shouldDimEdge('top')} />
+      <EdgeLabel position="left" isDimmed={shouldDimEdge('left')} />
+      <EdgeLabel position="right" isDimmed={shouldDimEdge('right')} />
 
       {/* Placed text blocks - permanently visible after release */}
       {Object.values(placedBlocks).map((block) => (
@@ -748,7 +742,7 @@ export function BorderFrame() {
           onLinkHover={handleLinkHover}
           onMobileLinkClick={handleMobileLinkClick}
           touchHoveredElement={touchHoveredElement}
-          isDimmed={isUIDimmed}
+          isDimmed={false}
         />
       ))}
 
