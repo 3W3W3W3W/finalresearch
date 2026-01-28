@@ -90,10 +90,8 @@ export function BorderFrame() {
     }, 2000);
   }, []);
 
-  // Track mouse movement to reset inactivity timer
+  // Track mouse/touch movement to reset inactivity timer
   useEffect(() => {
-    if (isMobile) return; // Don't track on mobile
-
     resetInactivityTimer();
 
     return () => {
@@ -101,7 +99,7 @@ export function BorderFrame() {
         clearTimeout(inactivityTimerRef.current);
       }
     };
-  }, [mousePosition, isMobile, resetInactivityTimer]);
+  }, [mousePosition, mobilePosition, resetInactivityTimer]);
 
   // Smooth animation for mobile cursor returning to center
   const animateMobilePosition = useCallback((from: MousePosition, to: MousePosition, duration: number, onComplete?: () => void) => {
@@ -250,7 +248,7 @@ export function BorderFrame() {
     return isPointInPlacedBlock(currentPosition);
   }, [currentPosition, isPointInPlacedBlock]);
 
-  if (isOverPlacedBlock && !isMobile) {
+  if (isOverPlacedBlock) {
     activeZone = null;
   }
 
@@ -416,6 +414,9 @@ export function BorderFrame() {
         const touch = e.touches[0];
         const startPos = { x: touch.clientX, y: touch.clientY };
 
+        // Undim UI on touch start
+        resetInactivityTimer();
+
         // Cancel any ongoing animation
         if (mobileAnimationRef.current) {
           cancelAnimationFrame(mobileAnimationRef.current);
@@ -460,6 +461,9 @@ export function BorderFrame() {
 
         if (absDeltaX > TAP_THRESHOLD || absDeltaY > TAP_THRESHOLD) {
           isDraggingRef.current = true;
+
+          // Keep UI undimmed while dragging
+          resetInactivityTimer();
 
           // Determine zone based on drag direction
           const zone = getZoneFromDrag(touchStartPosRef.current, currentPos);
@@ -594,7 +598,7 @@ export function BorderFrame() {
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [isMobile, activeZone, content, mousePosition, placedBlocks, textBlockRect, placeBlock, getZoneFromDrag, getZoneFromTapPosition, getContentForZone, animateMobilePosition, isPointInPlacedBlock, updateTouchHoverState, getInteractiveElementAtPoint, activateTouchHoveredElement]);
+  }, [isMobile, activeZone, content, mousePosition, placedBlocks, textBlockRect, placeBlock, getZoneFromDrag, getZoneFromTapPosition, getContentForZone, animateMobilePosition, isPointInPlacedBlock, updateTouchHoverState, getInteractiveElementAtPoint, activateTouchHoveredElement, resetInactivityTimer]);
 
   useEffect(() => {
     if (textBlockRef.current && showFloatingBlock) {
