@@ -45,6 +45,10 @@ export function BorderFrame() {
   const mobileAnimationRef = useRef<number | null>(null);
   const isAnimatingToCenter = useRef(false);
   const [touchHoveredElement, setTouchHoveredElement] = useState<HTMLElement | null>(null);
+
+  // Inactivity dimming state
+  const [isUIDimmed, setIsUIDimmed] = useState(true); // Start dimmed
+  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Use refs for touch state to avoid re-running effects on every touch change
   const touchStartPosRef = useRef<MousePosition | null>(null);
@@ -72,6 +76,32 @@ export function BorderFrame() {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Reset inactivity timer - undim UI and start 2s countdown
+  const resetInactivityTimer = useCallback(() => {
+    setIsUIDimmed(false);
+
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+
+    inactivityTimerRef.current = setTimeout(() => {
+      setIsUIDimmed(true);
+    }, 2000);
+  }, []);
+
+  // Track mouse movement to reset inactivity timer
+  useEffect(() => {
+    if (isMobile) return; // Don't track on mobile
+
+    resetInactivityTimer();
+
+    return () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+    };
+  }, [mousePosition, isMobile, resetInactivityTimer]);
 
   // Smooth animation for mobile cursor returning to center
   const animateMobilePosition = useCallback((from: MousePosition, to: MousePosition, duration: number, onComplete?: () => void) => {
@@ -213,7 +243,16 @@ export function BorderFrame() {
 
   // Use mobile position/zone when on mobile, otherwise use desktop
   const currentPosition = isMobile ? mobilePosition : mousePosition;
-  const activeZone = isMobile ? mobileActiveZone : desktopActiveZone;
+  let activeZone = isMobile ? mobileActiveZone : desktopActiveZone;
+
+  // Deadzone: if cursor is over a placed block, don't trigger any zone
+  const isOverPlacedBlock = useMemo(() => {
+    return isPointInPlacedBlock(currentPosition);
+  }, [currentPosition, isPointInPlacedBlock]);
+
+  if (isOverPlacedBlock && !isMobile) {
+    activeZone = null;
+  }
 
   const handleLinkHover = (rect: DOMRect | null) => {
     setHoveredLinkRect(rect);
@@ -294,12 +333,19 @@ export function BorderFrame() {
       zone,
       placedAt: Date.now(),
     };
-    setPlacedBlocks((prev) => {
-      const updated = { ...prev, [zone]: newBlock };
+    // Clear all previous blocks and place only the new one
+    setPlacedBlocks(() => {
+      const updated = { [zone]: newBlock };
       placedBlocksRef.current = updated;
       return updated;
     });
     setJustPlacedZones((prev) => new Set(prev).add(zone));
+
+    // Dim UI after placing
+    setIsUIDimmed(true);
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
   }, [calculateAdjustedPosition]);
 
   // Determine zone from drag direction (mobile)
@@ -672,15 +718,15 @@ export function BorderFrame() {
       }}
     >
       {/* Border edges */}
-      <BorderEdge position="top" isActive={activeZone === 'top'} isPlaced={!!placedBlocks.top || !!placedBlocks.bottom} isDimmed={isLinkHovered} />
-      <BorderEdge position="bottom" isActive={activeZone === 'bottom'} isPlaced={!!placedBlocks.top || !!placedBlocks.bottom} isDimmed={isLinkHovered} />
-      <BorderEdge position="left" isActive={activeZone === 'left'} isPlaced={!!placedBlocks.left} isDimmed={isLinkHovered} />
-      <BorderEdge position="right" isActive={activeZone === 'right'} isPlaced={!!placedBlocks.right} isDimmed={isLinkHovered} />
+      <BorderEdge position="top" isActive={activeZone === 'top'} isPlaced={!!placedBlocks.top || !!placedBlocks.bottom} isDimmed={isUIDimmed || isLinkHovered} />
+      <BorderEdge position="bottom" isActive={activeZone === 'bottom'} isPlaced={!!placedBlocks.top || !!placedBlocks.bottom} isDimmed={isUIDimmed || isLinkHovered} />
+      <BorderEdge position="left" isActive={activeZone === 'left'} isPlaced={!!placedBlocks.left} isDimmed={isUIDimmed || isLinkHovered} />
+      <BorderEdge position="right" isActive={activeZone === 'right'} isPlaced={!!placedBlocks.right} isDimmed={isUIDimmed || isLinkHovered} />
 
       {/* Edge labels */}
-      <EdgeLabel position="top" />
-      <EdgeLabel position="left" />
-      <EdgeLabel position="right" />
+      <EdgeLabel position="top" isDimmed={isUIDimmed || isLinkHovered} />
+      <EdgeLabel position="left" isDimmed={isUIDimmed || isLinkHovered} />
+      <EdgeLabel position="right" isDimmed={isUIDimmed || isLinkHovered} />
 
       {/* Placed text blocks - permanently visible after release */}
       {Object.values(placedBlocks).map((block) => (
@@ -709,12 +755,12 @@ export function BorderFrame() {
         />
       )}
 
-      {/* Corner lines - always track cursor, snap to hovered link if any */}
+      {/* Corner lines - always track cursor */}
       <CornerLines
-        textBlockRect={hoveredLinkRect || textBlockRect}
+        textBlockRect={textBlockRect}
         cursorPoint={currentPosition}
         isVisible={true}
-        isDimmed={isLinkHovered}
+        isDimmed={isUIDimmed || isLinkHovered}
       />
     </div>
   );

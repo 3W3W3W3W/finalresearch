@@ -121,9 +121,6 @@ export function CornerLines({ textBlockRect, cursorPoint, isVisible, isDimmed = 
 
   if (!isVisible || viewport.width === 0) return null;
   if (!cursorPoint) return null;
-  
-  // Don't render if there's no text block (dimensions are 0) - this prevents the "+" crosshair at the center
-  if (animatedHalfWidth === 0 && animatedHalfHeight === 0 && !textBlockRect) return null;
 
   const screenCorners = [
     { x: 0, y: 0 },
@@ -160,8 +157,8 @@ export function CornerLines({ textBlockRect, cursorPoint, isVisible, isDimmed = 
           stroke="var(--foreground)"
           strokeWidth="1"
           style={{
-            opacity: isDimmed ? 0.7 : 1,
-            transition: 'opacity 150ms ease-out',
+            opacity: isDimmed ? 0.5 : 1,
+            transition: 'opacity 300ms ease-out',
           }}
         />
       ))}
