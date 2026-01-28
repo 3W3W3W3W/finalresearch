@@ -12,6 +12,7 @@ interface HoverTextBlockProps {
   onLinkHover?: (rect: DOMRect | null) => void;
   onMobileLinkClick?: (rect: DOMRect) => void;
   touchHoveredElement?: HTMLElement | null;
+  isDimmed?: boolean;
 }
 
 interface TextSegment {
@@ -318,7 +319,7 @@ function ResourceLink({ href, children, onLinkHover, onMobileLinkClick, touchHov
 }
 
 export const HoverTextBlock = forwardRef<HTMLDivElement, HoverTextBlockProps>(
-  function HoverTextBlock({ position, content, zone, isJustPlaced = false, isDragging = false, onLinkHover, onMobileLinkClick, touchHoveredElement }, ref) {
+  function HoverTextBlock({ position, content, zone, isJustPlaced = false, isDragging = false, onLinkHover, onMobileLinkClick, touchHoveredElement, isDimmed = false }, ref) {
     const isHorizontalZone = zone === 'top' || zone === 'bottom';
     const segments = parseContent(content);
     const [copiedIdx, setCopiedIdx] = useState<number | undefined>(undefined);
@@ -349,13 +350,13 @@ export const HoverTextBlock = forwardRef<HTMLDivElement, HoverTextBlockProps>(
     };
 
     // Set consistent block widths for corner line snapping
-    // Horizontal zones (top/bottom) have longer text, vertical zones (left/right) should fit content
-    const blockWidth = isHorizontalZone ? (isMobile ? 350 : 350) : undefined;
+    // Horizontal zones (top/bottom) have longer text, vertical zones (left/right) use fixed width
+    const blockWidth = isHorizontalZone ? (isMobile ? 350 : 350) : (isMobile ? 100 : 120);
 
     return (
       <div
         ref={ref}
-        className="fixed text-foreground"
+        className="fixed text-foreground transition-opacity duration-300 ease-out"
         style={{
           left: position.x,
           top: position.y,
@@ -371,6 +372,7 @@ export const HoverTextBlock = forwardRef<HTMLDivElement, HoverTextBlockProps>(
           maxWidth: blockWidth,
           textAlign: isHorizontalZone ? 'left' : 'center',
           boxSizing: 'border-box',
+          opacity: isDimmed ? 0.5 : 1,
         }}
       >
         {segments.map((segment, idx) =>

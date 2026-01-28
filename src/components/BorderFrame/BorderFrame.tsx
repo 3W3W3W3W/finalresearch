@@ -91,7 +91,15 @@ export function BorderFrame() {
   }, []);
 
   // Track mouse/touch movement to reset inactivity timer
+  const isInitialMount = useRef(true);
+
   useEffect(() => {
+    // Don't undim on initial mount - keep starting at 50% opacity
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
     resetInactivityTimer();
 
     return () => {
@@ -429,11 +437,8 @@ export function BorderFrame() {
         setHoveredLinkRect(null);
 
         // Check if touch started in a placed block - if so, mark as started in block
-        // but still allow hover tracking
         if (isPointInPlacedBlock(startPos)) {
           touchStartPosRef.current = null; // Mark as not a drag candidate
-          // Immediately check for hover state at start position
-          updateTouchHoverState(startPos);
           return;
         }
 
@@ -448,9 +453,8 @@ export function BorderFrame() {
         const touch = e.touches[0];
         const currentPos = { x: touch.clientX, y: touch.clientY };
 
-        // If no touchStartPos, we started on a placed block - just track hover state using touch position
+        // If no touchStartPos, we started on a placed block - ignore movement
         if (!touchStartPosRef.current) {
-          updateTouchHoverState(currentPos);
           return;
         }
 
@@ -489,9 +493,6 @@ export function BorderFrame() {
           // Update mobile position (both ref and state)
           mobilePositionRef.current = newMobilePos;
           setMobilePosition(newMobilePos);
-
-          // Check for interactive elements at the cursor position
-          updateTouchHoverState(newMobilePos);
         }
       }
     };
@@ -509,9 +510,8 @@ export function BorderFrame() {
       const touch = e.changedTouches[0];
       const endPos = { x: touch.clientX, y: touch.clientY };
 
-      // Use current mobile position from ref to check for interactive elements
+      // Get current mobile position (center crosshair)
       const currentMobilePos = mobilePositionRef.current;
-      const hoveredElementAtXCenter = getInteractiveElementAtPoint(currentMobilePos);
 
       // Clear hover state
       setTouchHoveredElement(null);
@@ -519,18 +519,21 @@ export function BorderFrame() {
 
       // If touchStartPos is null, this was a touch that started on a placed block
       if (!touchStartPosRef.current) {
-        // If the cursor is over an interactive element, activate it
-        if (hoveredElementAtXCenter) {
-          activateTouchHoveredElement(hoveredElementAtXCenter, currentMobilePos);
+        // Check if mobile position is over a link at release
+        const linkAtCenter = getInteractiveElementAtPoint(currentMobilePos);
+        if (linkAtCenter) {
+          activateTouchHoveredElement(linkAtCenter, currentMobilePos);
         }
         return;
       }
 
       if (isDraggingRef.current) {
-        // Check if the cursor is over an interactive element when drag ends
-        if (hoveredElementAtXCenter) {
-          // Activate the element the cursor is hovering over
-          activateTouchHoveredElement(hoveredElementAtXCenter, currentMobilePos);
+        // Check if mobile position (center crosshair) is over a link when drag ends
+        const linkAtCenter = getInteractiveElementAtPoint(currentMobilePos);
+
+        if (linkAtCenter) {
+          // Link click: activate the link
+          activateTouchHoveredElement(linkAtCenter, currentMobilePos);
           // Animate back to center
           isAnimatingToCenter.current = true;
           animateMobilePosition(currentMobilePos, viewportCenterRef.current, CURSOR_RETURN_DURATION, () => {
@@ -539,7 +542,7 @@ export function BorderFrame() {
           mobileActiveZoneRef.current = null;
           setMobileActiveZone(null);
         } else {
-          // Was a drag - place the content if zone is active and not already placed
+          // No link: place content if zone is active and not already placed
           const currentZone = mobileActiveZoneRef.current;
           if (currentZone && !checkZonePlaced(currentZone, placedBlocksRef.current)) {
             const zoneContent = getContentForZone(currentZone);
@@ -745,6 +748,7 @@ export function BorderFrame() {
           onLinkHover={handleLinkHover}
           onMobileLinkClick={handleMobileLinkClick}
           touchHoveredElement={touchHoveredElement}
+          isDimmed={isUIDimmed}
         />
       ))}
 
