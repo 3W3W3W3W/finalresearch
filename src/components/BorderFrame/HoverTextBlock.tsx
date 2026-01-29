@@ -351,7 +351,7 @@ export const HoverTextBlock = forwardRef<HTMLDivElement, HoverTextBlockProps>(
 
     // Set consistent block widths for corner line snapping
     // Horizontal zones (top/bottom) have longer text, vertical zones (left/right) should fit content
-    const blockWidth = isHorizontalZone ? (isMobile ? 350 : 350) : undefined;
+    const blockWidth = isHorizontalZone ? (isMobile ? 215 : 215) : undefined;
 
     return (
       <div
@@ -388,8 +388,8 @@ export const HoverTextBlock = forwardRef<HTMLDivElement, HoverTextBlockProps>(
             touchHoveredElement,
           })
         )}
-        {/* Resources section - only shown when placed */}
-        {!isDragging && isHorizontalZone && (
+        {/* Resources section - hidden for now */}
+        {false && !isDragging && isHorizontalZone && (
           <div
             style={{
               display: 'flex',

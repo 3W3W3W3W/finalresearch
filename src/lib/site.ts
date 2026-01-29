@@ -12,6 +12,7 @@ export function getMetadata(): Metadata {
     title: siteConfig.title,
     description: siteConfig.description,
     keywords: siteConfig.keywords,
+    themeColor: '#000000',
     openGraph: {
       title: siteConfig.title,
       description: siteConfig.description,
